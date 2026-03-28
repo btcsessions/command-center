@@ -132,6 +132,9 @@ header .date {
   list-style: none;
   padding: 0 8px;
 }
+.task-wrapper:not(:last-child) {
+  border-bottom: 1px solid var(--border);
+}
 
 /* Task items */
 .task-item {
@@ -142,9 +145,6 @@ header .date {
   border-radius: 8px;
   transition: background 0.15s, opacity 0.2s;
   position: relative;
-}
-.task-item:not(:last-child) {
-  border-bottom: 1px solid var(--border);
 }
 .task-item.dragging {
   opacity: 0.3;
@@ -403,6 +403,52 @@ header .date {
   border-left: 4px solid var(--cat-color, var(--work));
 }
 
+/* Urgency dots */
+.urgency-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+.urgency-dot.low { background: #64748b; }
+.urgency-dot.medium { background: #3b82f6; }
+.urgency-dot.high { background: #f59e0b; }
+.urgency-dot.critical { background: #ef4444; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+/* Urgency toggle buttons in modal */
+.urgency-toggles { display: flex; gap: 6px; }
+.urgency-btn {
+  flex: 1; padding: 8px; border-radius: 8px; border: 2px solid var(--border);
+  background: transparent; color: var(--text-muted); font-size: 0.8rem;
+  font-weight: 600; cursor: pointer; min-height: 40px; font-family: inherit;
+  transition: all 0.15s;
+}
+.urgency-btn.active[data-urgency="low"] { background: #64748b; border-color: #64748b; color: #fff; }
+.urgency-btn.active[data-urgency="medium"] { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+.urgency-btn.active[data-urgency="high"] { background: #f59e0b; border-color: #f59e0b; color: #fff; }
+.urgency-btn.active[data-urgency="critical"] { background: #ef4444; border-color: #ef4444; color: #fff; }
+
+/* Due date badge */
+.due-badge { font-size: 0.7rem; padding: 2px 7px; border-radius: 10px; white-space: nowrap; flex-shrink: 0; }
+.due-badge.upcoming { background: rgba(255,255,255,0.08); color: var(--text-muted); }
+.due-badge.today { background: rgba(59,130,246,0.2); color: #3b82f6; }
+.due-badge.overdue { background: rgba(239,68,68,0.2); color: #ef4444; }
+
+/* Notes area */
+.task-notes-wrap { overflow: hidden; max-height: 0; transition: max-height 0.25s ease; }
+.task-notes-wrap.open { max-height: 500px; }
+.task-notes { padding: 6px 8px 10px 46px; font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; word-break: break-word; }
+.task-notes a { color: var(--work); text-decoration: underline; }
+.notes-icon {
+  color: var(--text-muted); font-size: 0.85rem; flex-shrink: 0; cursor: pointer;
+  padding: 4px; min-width: 28px; min-height: 44px; display: flex;
+  align-items: center; justify-content: center; background: none; border: none;
+  border-radius: 6px; transition: background 0.15s, color 0.15s;
+}
+.notes-icon:hover { background: var(--surface-hover); color: var(--text); }
+
+/* Textarea in modal */
+textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; }
+
+/* Preview urgency dot */
+.preview-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+
 /* Completed animation */
 .task-completing .task-title {
   text-decoration: line-through;
@@ -462,6 +508,23 @@ header .date {
         <label for="input-interval">Every how many days?</label>
         <input type="number" id="input-interval" class="form-input" min="2" max="365" value="2">
       </div>
+      <div class="form-group">
+        <label>Urgency</label>
+        <div class="urgency-toggles" id="urgency-toggles">
+          <button type="button" class="urgency-btn" data-urgency="low">Low</button>
+          <button type="button" class="urgency-btn active" data-urgency="medium">Medium</button>
+          <button type="button" class="urgency-btn" data-urgency="high">High</button>
+          <button type="button" class="urgency-btn" data-urgency="critical">Critical</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="input-due-date">Due Date (optional)</label>
+        <input type="date" id="input-due-date" class="form-input">
+      </div>
+      <div class="form-group">
+        <label for="input-notes">Notes (optional)</label>
+        <textarea id="input-notes" class="form-input" rows="3" placeholder="Add notes or links..."></textarea>
+      </div>
       <div class="modal-actions">
         <button type="button" class="btn btn-secondary" id="btn-cancel">Cancel</button>
         <button type="button" class="btn btn-danger hidden" id="btn-delete">Delete</button>
@@ -477,7 +540,7 @@ header .date {
 
   const STORAGE_KEY = 'nextaction_tasks';
   const VERSION_KEY = 'nextaction_version';
-  const CURRENT_VERSION = 1;
+  const CURRENT_VERSION = 2;
 
   const CATEGORIES = [
     { id: 'fitness',   name: 'Fitness',          icon: '\uD83D\uDCAA' },
@@ -490,8 +553,12 @@ header .date {
 
   let tasks = [];
   let expandedCategories = new Set();
+  let expandedNotes = new Set();
   let editingTaskId = null;
   let lastDateStr = '';
+
+  const URGENCY_WEIGHTS = { critical: 0, high: 1, medium: 2, low: 3 };
+  const URGENCY_COLORS = { low: '#64748b', medium: '#3b82f6', high: '#f59e0b', critical: '#ef4444' };
 
   // --- Date Utilities ---
   function getTodayStr() {
@@ -547,6 +614,12 @@ header .date {
     } catch (e) {
       tasks = [];
     }
+    // Migrate v1 tasks to v2
+    tasks.forEach(function(t) {
+      if (!t.urgency) t.urgency = 'medium';
+      if (t.dueDate === undefined) t.dueDate = null;
+      if (t.notes === undefined) t.notes = '';
+    });
     pruneOldData();
   }
 
@@ -575,11 +648,22 @@ header .date {
     });
   }
 
+  function getUrgencyWeight(task, todayStr) {
+    var w = URGENCY_WEIGHTS[task.urgency] !== undefined ? URGENCY_WEIGHTS[task.urgency] : 2;
+    if (task.dueDate && task.dueDate <= todayStr && w > 0) w--;
+    return w;
+  }
+
   function getVisibleTasks(category) {
     const todayStr = getTodayStr();
     return tasks
       .filter(function(t) { return t.category === category && isTaskVisible(t, todayStr); })
-      .sort(function(a, b) { return a.sortOrder - b.sortOrder; });
+      .sort(function(a, b) {
+        var ua = getUrgencyWeight(a, todayStr);
+        var ub = getUrgencyWeight(b, todayStr);
+        if (ua !== ub) return ua - ub;
+        return a.sortOrder - b.sortOrder;
+      });
   }
 
   function getTasksByCategory(category) {
@@ -595,7 +679,7 @@ header .date {
   }
 
   // --- CRUD ---
-  function createTask(title, category, recurring) {
+  function createTask(title, category, recurring, urgency, dueDate, notes) {
     var id;
     if (typeof crypto !== 'undefined' && crypto.randomUUID) {
       id = crypto.randomUUID();
@@ -609,7 +693,10 @@ header .date {
       recurring: recurring,
       completions: [],
       createdAt: new Date().toISOString(),
-      sortOrder: nextSortOrder(category)
+      sortOrder: nextSortOrder(category),
+      urgency: urgency || 'medium',
+      dueDate: dueDate || null,
+      notes: notes || ''
     };
     tasks.push(task);
     saveTasks();
@@ -646,6 +733,37 @@ header .date {
     saveTasks();
   }
 
+  // --- Helpers ---
+  function linkifyText(text, container) {
+    var urlRegex = /(https?:\/\/[^\s<]+)/g;
+    var lastIdx = 0;
+    var match;
+    while ((match = urlRegex.exec(text)) !== null) {
+      if (match.index > lastIdx) {
+        container.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
+      }
+      var a = document.createElement('a');
+      a.href = match[1];
+      a.textContent = match[1];
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      container.appendChild(a);
+      lastIdx = urlRegex.lastIndex;
+    }
+    if (lastIdx < text.length) {
+      container.appendChild(document.createTextNode(text.slice(lastIdx)));
+    }
+  }
+
+  function formatDueDate(dateStr, todayStr) {
+    if (!dateStr) return null;
+    var d = new Date(dateStr + 'T00:00:00');
+    var label = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    if (dateStr < todayStr) return { text: 'Overdue', cls: 'overdue' };
+    if (dateStr === todayStr) return { text: 'Due today', cls: 'today' };
+    return { text: 'Due ' + label, cls: 'upcoming' };
+  }
+
   // --- Rendering ---
   function render() {
     const app = document.getElementById('app');
@@ -680,7 +798,11 @@ header .date {
       const preview = document.createElement('span');
       preview.className = 'next-preview';
       if (nextTask) {
-        preview.textContent = nextTask.title;
+        var dot = document.createElement('span');
+        dot.className = 'preview-dot';
+        dot.style.background = URGENCY_COLORS[nextTask.urgency] || URGENCY_COLORS.medium;
+        preview.appendChild(dot);
+        preview.appendChild(document.createTextNode(nextTask.title));
       } else if (!expandedCategories.has(cat.id)) {
         preview.textContent = 'No tasks';
       }
@@ -698,12 +820,12 @@ header .date {
       const body = document.createElement('div');
       body.className = 'category-body';
 
-      const list = document.createElement('ul');
+      const list = document.createElement('div');
       list.className = 'task-list';
       list.dataset.category = cat.id;
 
       if (visible.length === 0) {
-        const empty = document.createElement('li');
+        const empty = document.createElement('div');
         empty.className = 'empty-msg';
         empty.textContent = 'No tasks scheduled for today';
         list.appendChild(empty);
@@ -730,7 +852,12 @@ header .date {
   }
 
   function renderTaskItem(task, isFirst) {
-    const li = document.createElement('li');
+    var todayStr = getTodayStr();
+    var wrapper = document.createElement('div');
+    wrapper.className = 'task-wrapper';
+    wrapper.dataset.id = task.id;
+
+    const li = document.createElement('div');
     li.className = 'task-item' + (isFirst ? ' first-task' : '');
     li.dataset.id = task.id;
     li.setAttribute('draggable', 'true');
@@ -738,6 +865,9 @@ header .date {
     const handle = document.createElement('span');
     handle.className = 'drag-handle';
     handle.textContent = '\u2630';
+
+    var urgDot = document.createElement('span');
+    urgDot.className = 'urgency-dot ' + (task.urgency || 'medium');
 
     const check = document.createElement('input');
     check.type = 'checkbox';
@@ -749,6 +879,7 @@ header .date {
     title.textContent = task.title;
 
     li.appendChild(handle);
+    li.appendChild(urgDot);
     li.appendChild(check);
     li.appendChild(title);
 
@@ -760,13 +891,43 @@ header .date {
       li.appendChild(badge);
     }
 
+    var dueInfo = formatDueDate(task.dueDate, todayStr);
+    if (dueInfo) {
+      var dueBadge = document.createElement('span');
+      dueBadge.className = 'due-badge ' + dueInfo.cls;
+      dueBadge.textContent = dueInfo.text;
+      li.appendChild(dueBadge);
+    }
+
+    if (task.notes) {
+      var notesBtn = document.createElement('button');
+      notesBtn.className = 'notes-icon';
+      notesBtn.setAttribute('aria-label', 'Toggle notes');
+      notesBtn.textContent = '\uD83D\uDCDD';
+      notesBtn.dataset.id = task.id;
+      li.appendChild(notesBtn);
+    }
+
     const editBtn = document.createElement('button');
     editBtn.className = 'task-edit-btn';
     editBtn.setAttribute('aria-label', 'Edit task');
     editBtn.textContent = '\u270E';
     li.appendChild(editBtn);
 
-    return li;
+    wrapper.appendChild(li);
+
+    if (task.notes) {
+      var notesWrap = document.createElement('div');
+      notesWrap.className = 'task-notes-wrap' + (expandedNotes.has(task.id) ? ' open' : '');
+      notesWrap.dataset.notesFor = task.id;
+      var notesDiv = document.createElement('div');
+      notesDiv.className = 'task-notes';
+      linkifyText(task.notes, notesDiv);
+      notesWrap.appendChild(notesDiv);
+      wrapper.appendChild(notesWrap);
+    }
+
+    return wrapper;
   }
 
   // --- Modal ---
@@ -783,10 +944,16 @@ header .date {
 
     form.reset();
     clearDayToggles();
+    setActiveUrgency('medium');
+    document.getElementById('input-due-date').value = '';
+    document.getElementById('input-notes').value = '';
 
     if (mode === 'edit' && task) {
       document.getElementById('input-title').value = task.title;
       document.getElementById('input-category').value = task.category;
+      setActiveUrgency(task.urgency || 'medium');
+      document.getElementById('input-due-date').value = task.dueDate || '';
+      document.getElementById('input-notes').value = task.notes || '';
       if (task.recurring) {
         document.getElementById('input-recurrence').value = task.recurring.type;
         if (task.recurring.type === 'weekly') {
@@ -822,6 +989,17 @@ header .date {
     const type = document.getElementById('input-recurrence').value;
     document.getElementById('weekly-group').classList.toggle('hidden', type !== 'weekly');
     document.getElementById('custom-group').classList.toggle('hidden', type !== 'custom');
+  }
+
+  function setActiveUrgency(level) {
+    document.querySelectorAll('.urgency-btn').forEach(function(btn) {
+      btn.classList.toggle('active', btn.dataset.urgency === level);
+    });
+  }
+
+  function getActiveUrgency() {
+    var active = document.querySelector('.urgency-btn.active');
+    return active ? active.dataset.urgency : 'medium';
   }
 
   function clearDayToggles() {
@@ -861,11 +1039,17 @@ header .date {
     if (!title) return;
     const category = document.getElementById('input-category').value;
     const recurring = buildRecurring();
+    const urgency = getActiveUrgency();
+    const dueDate = document.getElementById('input-due-date').value || null;
+    const notes = document.getElementById('input-notes').value.trim();
 
     if (editingTaskId) {
-      updateTask(editingTaskId, { title: title, category: category, recurring: recurring });
+      updateTask(editingTaskId, {
+        title: title, category: category, recurring: recurring,
+        urgency: urgency, dueDate: dueDate, notes: notes
+      });
     } else {
-      createTask(title, category, recurring);
+      createTask(title, category, recurring, urgency, dueDate, notes);
       if (!expandedCategories.has(category)) {
         expandedCategories.add(category);
       }
@@ -1050,22 +1234,36 @@ header .date {
     // Complete task
     const check = e.target.closest('.task-check');
     if (check) {
-      const li = check.closest('.task-item');
-      if (!li) return;
-      li.classList.add('task-completing');
+      const item = check.closest('.task-item');
+      if (!item) return;
+      item.classList.add('task-completing');
       setTimeout(function() {
-        completeTask(li.dataset.id);
+        completeTask(item.dataset.id);
         render();
       }, 300);
+      return;
+    }
+
+    // Toggle notes
+    const notesBtn = e.target.closest('.notes-icon');
+    if (notesBtn) {
+      var nid = notesBtn.dataset.id;
+      if (expandedNotes.has(nid)) {
+        expandedNotes.delete(nid);
+      } else {
+        expandedNotes.add(nid);
+      }
+      var wrap = document.querySelector('.task-notes-wrap[data-notes-for="' + nid + '"]');
+      if (wrap) wrap.classList.toggle('open', expandedNotes.has(nid));
       return;
     }
 
     // Edit task
     const editBtn = e.target.closest('.task-edit-btn');
     if (editBtn) {
-      const li = editBtn.closest('.task-item');
-      if (!li) return;
-      const task = tasks.find(function(t) { return t.id === li.dataset.id; });
+      const item = editBtn.closest('.task-item');
+      if (!item) return;
+      const task = tasks.find(function(t) { return t.id === item.dataset.id; });
       if (task) openModal('edit', task);
       return;
     }
@@ -1111,6 +1309,12 @@ header .date {
   document.getElementById('day-toggles').addEventListener('click', function(e) {
     const btn = e.target.closest('.day-toggle');
     if (btn) btn.classList.toggle('active');
+  });
+
+  // Urgency toggle clicks
+  document.getElementById('urgency-toggles').addEventListener('click', function(e) {
+    const btn = e.target.closest('.urgency-btn');
+    if (btn) setActiveUrgency(btn.dataset.urgency);
   });
 
   // --- Midnight Checker ---
