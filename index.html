@@ -175,6 +175,17 @@ header .date {
 .task-item.drag-over-bottom {
   box-shadow: 0 2px 0 0 var(--cat-color) inset;
 }
+/* Drop zone highlights for cross-container drops */
+.category-header.drag-over-bottom {
+  background: rgba(255,255,255,0.08);
+  box-shadow: 0 2px 0 0 var(--cat-color) inset;
+}
+.subtask-list.drag-over-bottom,
+.add-subtask-btn.drag-over-bottom {
+  background: rgba(255,255,255,0.06);
+  box-shadow: 0 0 0 1px var(--cat-color) inset;
+  border-radius: 6px;
+}
 .task-item.first-task {
   background: rgba(255,255,255,0.03);
 }
@@ -986,6 +997,9 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       }
     }
 
+    // Also move subtasks to new category if moving a project across categories
+    var oldCategory = task.category;
+
     if (destProjectId) {
       // Moving into a project as subtask
       var destProject = tasks.find(function(t) { return t.id === destProjectId; });
@@ -1002,12 +1016,10 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       task.sortOrder = nextSortOrder(destCategory);
     }
 
-    // Also move subtasks to new category if moving a project across categories
-    if (task.isProject && destCategory !== task.category) {
+    if (task.isProject && task.category !== oldCategory) {
       tasks.forEach(function(t) {
-        if (t.parentId === taskId) t.category = destCategory;
+        if (t.parentId === taskId) t.category = task.category;
       });
-      task.category = destCategory;
     }
 
     saveTasks();
@@ -1578,6 +1590,81 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     render();
   }
 
+  // Resolve where a drop lands: returns { listEl, targetId, insertBefore } or
+  // { moveOnly: true, destCategory, destProjectId } for zone-based drops.
+  function resolveDropTarget(el, clientY) {
+    // 1. Dropped on a task-item — standard reorder / cross-list move
+    var taskItem = el.closest('.task-item');
+    if (taskItem && taskItem.dataset.id !== draggedId) {
+      var listEl = taskItem.closest('.task-list');
+      if (listEl) {
+        var rect = taskItem.getBoundingClientRect();
+        return { listEl: listEl, targetId: taskItem.dataset.id, insertBefore: clientY < rect.top + rect.height / 2 };
+      }
+    }
+    // 2. Dropped on an expanded project's subtask area (empty msg, add-subtask btn, or subtask-list gap)
+    var subtaskList = el.closest('.subtask-list');
+    if (subtaskList && subtaskList.dataset.projectId) {
+      return { moveOnly: true, destCategory: subtaskList.dataset.category, destProjectId: subtaskList.dataset.projectId };
+    }
+    var addSubBtn = el.closest('.add-subtask-btn');
+    if (addSubBtn && addSubBtn.dataset.projectId) {
+      var proj = tasks.find(function(t) { return t.id === addSubBtn.dataset.projectId; });
+      return { moveOnly: true, destCategory: proj ? proj.category : null, destProjectId: addSubBtn.dataset.projectId };
+    }
+    // 3. Dropped on a project row itself — add as subtask of that project
+    if (taskItem && taskItem.dataset.id) {
+      var droppedOnTask = tasks.find(function(t) { return t.id === taskItem.dataset.id; });
+      if (droppedOnTask && droppedOnTask.isProject && taskItem.dataset.id !== draggedId) {
+        return { moveOnly: true, destCategory: droppedOnTask.category, destProjectId: droppedOnTask.id };
+      }
+    }
+    // 4. Dropped on category header or body — move to that category as top-level
+    var catSection = el.closest('.category');
+    if (catSection) {
+      return { moveOnly: true, destCategory: catSection.dataset.category, destProjectId: null };
+    }
+    return null;
+  }
+
+  function executeDrop(dropInfo) {
+    if (!draggedId) return;
+    var movedTask = tasks.find(function(t) { return t.id === draggedId; });
+    if (!movedTask) return;
+
+    if (dropInfo.moveOnly) {
+      // Don't allow dropping a project into another project
+      if (movedTask.isProject && dropInfo.destProjectId) return;
+      var srcProjectId = movedTask.parentId || null;
+      var srcCategory = movedTask.category;
+      if (srcProjectId !== dropInfo.destProjectId || srcCategory !== dropInfo.destCategory) {
+        moveTask(draggedId, dropInfo.destCategory, dropInfo.destProjectId);
+        if (dropInfo.destProjectId) expandedProjects.add(dropInfo.destProjectId);
+      }
+      render();
+    } else {
+      finalizeDrag(dropInfo.listEl, draggedId, dropInfo.targetId, dropInfo.insertBefore);
+    }
+  }
+
+  // Visual feedback for drop zones
+  function showDropZoneIndicator(el) {
+    clearAllDropIndicators();
+    // Highlight task-item
+    var taskItem = el.closest('.task-item');
+    if (taskItem && taskItem.dataset.id !== draggedId) {
+      taskItem.classList.add('drag-over-bottom');
+      return;
+    }
+    // Highlight subtask area or category
+    var subtaskList = el.closest('.subtask-list');
+    if (subtaskList) { subtaskList.classList.add('drag-over-bottom'); return; }
+    var addSubBtn = el.closest('.add-subtask-btn');
+    if (addSubBtn) { addSubBtn.classList.add('drag-over-bottom'); return; }
+    var catHeader = el.closest('.category-header');
+    if (catHeader) { catHeader.classList.add('drag-over-bottom'); return; }
+  }
+
   // Desktop drag (delegated on #app)
   (function() {
     var app = document.getElementById('app');
@@ -1600,6 +1687,8 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         var rect = target.getBoundingClientRect();
         var mid = rect.top + rect.height / 2;
         target.classList.add(e.clientY < mid ? 'drag-over-top' : 'drag-over-bottom');
+      } else {
+        showDropZoneIndicator(e.target);
       }
     });
 
@@ -1611,13 +1700,9 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     app.addEventListener('drop', function(e) {
       e.preventDefault();
       clearAllDropIndicators();
-      var target = e.target.closest('.task-item');
-      if (!target || !draggedId || target.dataset.id === draggedId) return;
-      var targetList = target.closest('.task-list');
-      if (!targetList) return;
-      var rect = target.getBoundingClientRect();
-      var insertBefore = e.clientY < rect.top + rect.height / 2;
-      finalizeDrag(targetList, draggedId, target.dataset.id, insertBefore);
+      if (!draggedId) return;
+      var dropInfo = resolveDropTarget(e.target, e.clientY);
+      if (dropInfo) executeDrop(dropInfo);
     });
 
     app.addEventListener('dragend', function() {
@@ -1633,7 +1718,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     var app = document.getElementById('app');
     var touchId = null;
     var ghost = null;
-    var currentTarget = null;
+    var lastTouchEl = null;
 
     app.addEventListener('touchstart', function(e) {
       var handle = e.target.closest('.drag-handle');
@@ -1642,6 +1727,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       if (!li) return;
 
       touchId = li.dataset.id;
+      draggedId = touchId;
       li.classList.add('dragging');
 
       ghost = document.createElement('div');
@@ -1667,35 +1753,38 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       ghost.style.display = '';
 
       clearAllDropIndicators();
+      lastTouchEl = el;
       if (el) {
         var target = el.closest('.task-item');
         if (target && target.dataset.id !== touchId) {
-          currentTarget = target;
           var rect = target.getBoundingClientRect();
           var mid = rect.top + rect.height / 2;
           target.classList.add(touch.clientY < mid ? 'drag-over-top' : 'drag-over-bottom');
+        } else {
+          showDropZoneIndicator(el);
         }
       }
     }, { passive: false });
 
-    app.addEventListener('touchend', function() {
+    app.addEventListener('touchend', function(e) {
       if (!touchId) return;
       clearAllDropIndicators();
       var dragging = document.querySelector('.dragging');
       if (dragging) dragging.classList.remove('dragging');
 
-      if (currentTarget && currentTarget.dataset.id !== touchId) {
-        var targetList = currentTarget.closest('.task-list');
-        if (targetList) {
-          var hasTop = currentTarget.classList.contains('drag-over-top');
-          finalizeDrag(targetList, touchId, currentTarget.dataset.id, hasTop);
-        }
+      if (lastTouchEl) {
+        // Use last known touch position to find element
+        var touch = e.changedTouches && e.changedTouches[0];
+        var clientY = touch ? touch.clientY : 0;
+        var dropInfo = resolveDropTarget(lastTouchEl, clientY);
+        if (dropInfo) executeDrop(dropInfo);
       }
 
       if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost);
       ghost = null;
       touchId = null;
-      currentTarget = null;
+      draggedId = null;
+      lastTouchEl = null;
     });
 
     app.addEventListener('touchcancel', function() {
@@ -1705,7 +1794,8 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       if (dragging) dragging.classList.remove('dragging');
       ghost = null;
       touchId = null;
-      currentTarget = null;
+      draggedId = null;
+      lastTouchEl = null;
     });
   })();
 
