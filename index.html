@@ -164,6 +164,7 @@ header .date {
   border-radius: 8px;
   transition: background 0.15s, opacity 0.2s;
   position: relative;
+  overflow: hidden;
 }
 .task-item.dragging {
   opacity: 0.3;
@@ -221,9 +222,11 @@ header .date {
 
 .task-title {
   flex: 1;
-  min-width: 0;
+  min-width: 60px;
   font-size: 0.9rem;
   word-break: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .recurrence-badge {
@@ -479,7 +482,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 .project-expand-arrow {
   cursor: pointer; flex-shrink: 0; font-size: 0.7rem;
   color: var(--text-muted); transition: transform 0.2s;
-  padding: 4px; min-width: 28px; min-height: 44px;
+  padding: 4px; width: 22px; min-height: 22px;
   display: flex; align-items: center; justify-content: center;
   background: none; border: none;
 }
@@ -490,18 +493,18 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 
 /* Progress bar */
 .project-progress {
-  display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+  display: flex; align-items: center; gap: 6px; flex-shrink: 1; min-width: 0;
 }
 .progress-bar {
-  width: 48px; height: 4px; background: rgba(255,255,255,0.1);
-  border-radius: 2px; overflow: hidden;
+  width: 36px; min-width: 20px; height: 4px; background: rgba(255,255,255,0.1);
+  border-radius: 2px; overflow: hidden; flex-shrink: 1;
 }
 .progress-bar-fill {
   height: 100%; border-radius: 2px;
   background: var(--cat-color); transition: width 0.3s;
 }
 .progress-text {
-  font-size: 0.7rem; color: var(--text-muted); white-space: nowrap;
+  font-size: 0.7rem; color: var(--text-muted); white-space: nowrap; flex-shrink: 0;
 }
 
 /* Subtask indentation */
