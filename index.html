@@ -21,10 +21,6 @@
   --text-muted: #6faa96;
   --border: rgba(40, 80, 68, 0.6);
   --radius: 12px;
-  --fitness: #22c55e;
-  --work: #00d4aa;
-  --personal: #38bdf8;
-  --education: #a78bfa;
   --danger: #f43f5e;
   --glow: rgba(0, 212, 170, 0.15);
 }
@@ -93,15 +89,17 @@ header .date {
 
 #app {
   padding: 8px;
-  max-width: 1200px;
-  margin: 0 auto;
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  scroll-padding: 8px;
 }
-
+#app::-webkit-scrollbar { display: none; }
 @media (min-width: 640px) {
-  #app { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px; align-items: start; }
-}
-@media (min-width: 1024px) {
-  #app { grid-template-columns: repeat(4, 1fr); }
+  #app { padding: 16px; }
 }
 
 /* Category cards */
@@ -110,18 +108,66 @@ header .date {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-radius: var(--radius);
-  margin-bottom: 8px;
   overflow: hidden;
   border-left: 4px solid var(--cat-color);
   box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.04);
+  min-width: 280px;
+  max-width: 400px;
+  flex: 1 0 280px;
+  scroll-snap-align: start;
 }
-@media (min-width: 640px) {
-  .category { margin-bottom: 0; }
+
+/* Add category card */
+.add-category-card {
+  min-width: 200px;
+  flex: 0 0 200px;
+  scroll-snap-align: start;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  min-height: 56px;
+  gap: 8px;
+  padding: 16px;
 }
-.category[data-category="fitness"]  { --cat-color: var(--fitness); }
-.category[data-category="work"]     { --cat-color: var(--work); }
-.category[data-category="personal"] { --cat-color: var(--personal); }
-.category[data-category="education"]{ --cat-color: var(--education); }
+.add-category-card:hover {
+  background: var(--surface-hover);
+  border-color: var(--text-muted);
+  color: var(--text);
+}
+
+/* Category edit button in header */
+.cat-edit-btn {
+  background: none; border: none; color: var(--text-muted); cursor: pointer;
+  font-size: 0.85rem; padding: 4px 6px; border-radius: 4px; flex-shrink: 0;
+  transition: background 0.15s, color 0.15s; line-height: 1;
+}
+.cat-edit-btn:hover { background: var(--surface-hover); color: var(--text); }
+
+/* Category drag handle */
+.cat-drag-handle {
+  cursor: grab; color: var(--text-muted); font-size: 0.75rem; flex-shrink: 0;
+  padding: 4px 2px; user-select: none; -webkit-user-select: none;
+  touch-action: none; opacity: 0.5; transition: opacity 0.15s;
+}
+.cat-drag-handle:hover { opacity: 1; }
+.category.cat-dragging { opacity: 0.3; }
+.category.cat-drag-over-left { box-shadow: -3px 0 0 0 var(--cat-color); }
+.category.cat-drag-over-right { box-shadow: 3px 0 0 0 var(--cat-color); }
+
+/* Color swatches for category editor */
+.color-swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+.color-swatch {
+  width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent;
+  cursor: pointer; transition: border-color 0.15s, transform 0.15s;
+}
+.color-swatch:hover { transform: scale(1.15); }
+.color-swatch.active { border-color: var(--text); }
 
 .category-header {
   display: flex;
@@ -660,12 +706,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       </div>
       <div class="form-group" id="category-group">
         <label for="input-category">Category</label>
-        <select id="input-category" class="form-select">
-          <option value="fitness">Fitness</option>
-          <option value="work">Work</option>
-          <option value="personal">Personal Errands</option>
-          <option value="education">Education</option>
-        </select>
+        <select id="input-category" class="form-select"></select>
       </div>
       <div class="form-group">
         <label for="input-recurrence">Recurrence</label>
@@ -718,12 +759,38 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   </div>
 </div>
 
+<div class="modal-overlay" id="cat-modal-overlay">
+  <div class="modal-content">
+    <h2 class="modal-title" id="cat-modal-title">Add Category</h2>
+    <form id="cat-form">
+      <div class="form-group">
+        <label for="cat-input-name">Name</label>
+        <input type="text" id="cat-input-name" class="form-input" placeholder="Category name" required autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label for="cat-input-icon">Icon (emoji)</label>
+        <input type="text" id="cat-input-icon" class="form-input" placeholder="e.g. &#x1F3AF;" autocomplete="off" maxlength="4">
+      </div>
+      <div class="form-group">
+        <label>Color</label>
+        <div class="color-swatches" id="color-swatches"></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="cat-btn-cancel">Cancel</button>
+        <button type="button" class="btn btn-danger hidden" id="cat-btn-delete">Delete</button>
+        <button type="submit" class="btn btn-primary" id="cat-btn-save">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
 (function() {
   'use strict';
 
   const STORAGE_KEY = 'nextaction_tasks';
   const VERSION_KEY = 'nextaction_version';
+  const CATEGORIES_KEY = 'nextaction_categories';
   const CURRENT_VERSION = 3;
 
   // Versioned migration functions: each takes the tasks array and mutates it in place.
@@ -753,12 +820,75 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     }
   }
 
-  const CATEGORIES = [
-    { id: 'fitness',   name: 'Fitness',          icon: '\uD83D\uDCAA' },
-    { id: 'work',      name: 'Work',             icon: '\uD83D\uDCBC' },
-    { id: 'personal',  name: 'Personal Errands', icon: '\uD83C\uDFE0' },
-    { id: 'education', name: 'Education',         icon: '\uD83D\uDCDA' }
+  var DEFAULT_CATEGORIES = [
+    { id: 'fitness',   name: 'Fitness',          icon: '\uD83D\uDCAA', color: '#22c55e', sortOrder: 0 },
+    { id: 'work',      name: 'Work',             icon: '\uD83D\uDCBC', color: '#00d4aa', sortOrder: 1 },
+    { id: 'personal',  name: 'Personal Errands', icon: '\uD83C\uDFE0', color: '#38bdf8', sortOrder: 2 },
+    { id: 'education', name: 'Education',         icon: '\uD83D\uDCDA', color: '#a78bfa', sortOrder: 3 }
   ];
+
+  var CATEGORY_COLORS = [
+    '#22c55e', '#00d4aa', '#38bdf8', '#a78bfa', '#f59e0b',
+    '#ef4444', '#ec4899', '#8b5cf6', '#06b6d4', '#84cc16',
+    '#f97316', '#14b8a6', '#6366f1', '#e879f9', '#facc15'
+  ];
+
+  let categories = [];
+
+  function loadCategories() {
+    try {
+      var raw = localStorage.getItem(CATEGORIES_KEY);
+      categories = raw ? JSON.parse(raw) : [];
+    } catch(e) {
+      categories = [];
+    }
+    if (categories.length === 0) {
+      categories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
+      saveCategories();
+    }
+    categories.sort(function(a, b) { return a.sortOrder - b.sortOrder; });
+  }
+
+  function saveCategories() {
+    localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
+  }
+
+  function addCategory(name, icon, color) {
+    var id = 'cat_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    var maxOrder = categories.length > 0 ? Math.max.apply(null, categories.map(function(c) { return c.sortOrder; })) : -1;
+    categories.push({ id: id, name: name.trim(), icon: icon, color: color, sortOrder: maxOrder + 1 });
+    saveCategories();
+    return id;
+  }
+
+  function updateCategory(id, updates) {
+    var cat = categories.find(function(c) { return c.id === id; });
+    if (cat) {
+      Object.assign(cat, updates);
+      saveCategories();
+    }
+  }
+
+  function deleteCategory(id) {
+    var catTasks = tasks.filter(function(t) { return t.category === id; });
+    if (catTasks.length > 0) {
+      if (!confirm('This category has ' + catTasks.length + ' task(s). Delete them too?')) return false;
+      tasks = tasks.filter(function(t) { return t.category !== id; });
+      saveTasks();
+    }
+    categories = categories.filter(function(c) { return c.id !== id; });
+    saveCategories();
+    return true;
+  }
+
+  function reorderCategories(orderedIds) {
+    orderedIds.forEach(function(id, i) {
+      var cat = categories.find(function(c) { return c.id === id; });
+      if (cat) cat.sortOrder = i;
+    });
+    categories.sort(function(a, b) { return a.sortOrder - b.sortOrder; });
+    saveCategories();
+  }
 
   const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -1129,10 +1259,22 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     document.getElementById('today-date').textContent = formatDateDisplay(todayStr);
     lastDateStr = todayStr;
 
-    CATEGORIES.forEach(function(cat) {
+    // Populate category select in modal
+    var catSelect = document.getElementById('input-category');
+    catSelect.textContent = '';
+    categories.forEach(function(c) {
+      var opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.name;
+      catSelect.appendChild(opt);
+    });
+
+    categories.forEach(function(cat) {
       const section = document.createElement('section');
       section.className = 'category' + (expandedCategories.has(cat.id) ? ' expanded' : '');
       section.dataset.category = cat.id;
+      section.setAttribute('draggable', 'false');
+      section.style.setProperty('--cat-color', cat.color);
 
       const visible = getVisibleTasks(cat.id);
       const nextTask = visible[0] || null;
@@ -1143,6 +1285,11 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       header.setAttribute('role', 'button');
       header.setAttribute('tabindex', '0');
       header.setAttribute('aria-expanded', expandedCategories.has(cat.id) ? 'true' : 'false');
+
+      var catDragHandle = document.createElement('span');
+      catDragHandle.className = 'cat-drag-handle';
+      catDragHandle.textContent = '\u2630';
+      catDragHandle.setAttribute('aria-label', 'Drag to reorder category');
 
       const icon = document.createElement('span');
       icon.className = 'category-icon';
@@ -1190,9 +1337,17 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       arrow.className = 'expand-arrow';
       arrow.textContent = '\u25BC';
 
+      var catEditBtn = document.createElement('button');
+      catEditBtn.className = 'cat-edit-btn';
+      catEditBtn.dataset.catId = cat.id;
+      catEditBtn.textContent = '\u22EF';
+      catEditBtn.setAttribute('aria-label', 'Edit category');
+
+      header.appendChild(catDragHandle);
       header.appendChild(icon);
       header.appendChild(name);
       header.appendChild(preview);
+      header.appendChild(catEditBtn);
       header.appendChild(arrow);
 
       // Body
@@ -1249,9 +1404,14 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       section.appendChild(header);
       section.appendChild(body);
       app.appendChild(section);
-
-
     });
+
+    // Add category card
+    var addCatCard = document.createElement('div');
+    addCatCard.className = 'add-category-card';
+    addCatCard.id = 'add-category-btn';
+    addCatCard.textContent = '+ Category';
+    app.appendChild(addCatCard);
   }
 
   function renderTaskItem(task, isFirst, isSubtask) {
@@ -1651,6 +1811,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 
   // --- Drag and Drop (Global — supports cross-category and task↔subtask moves) ---
   let draggedId = null;
+  let catDragActive = false;
 
   function clearAllDropIndicators() {
     document.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(function(el) {
@@ -1805,6 +1966,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     });
 
     app.addEventListener('dragover', function(e) {
+      if (catDragActive) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
       clearAllDropIndicators();
@@ -1819,11 +1981,13 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     });
 
     app.addEventListener('dragleave', function(e) {
+      if (catDragActive) return;
       var target = e.target.closest('.task-item');
       if (target) target.classList.remove('drag-over-top', 'drag-over-bottom');
     });
 
     app.addEventListener('drop', function(e) {
+      if (catDragActive) return;
       e.preventDefault();
       clearAllDropIndicators();
       if (!draggedId) return;
@@ -1925,6 +2089,161 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     });
   })();
 
+  // --- Category Drag-and-Drop Reorder ---
+  (function() {
+    var app = document.getElementById('app');
+    var catDragId = null;
+
+    // Enable draggable only when grabbing the drag handle
+    app.addEventListener('mousedown', function(e) {
+      var handle = e.target.closest('.cat-drag-handle');
+      if (!handle) return;
+      var section = handle.closest('.category');
+      if (section) section.setAttribute('draggable', 'true');
+    });
+    document.addEventListener('mouseup', function() {
+      document.querySelectorAll('.category[draggable="true"]').forEach(function(s) {
+        s.setAttribute('draggable', 'false');
+      });
+    });
+
+    app.addEventListener('dragstart', function(e) {
+      var handle = e.target.closest('.cat-drag-handle');
+      if (!handle) return;
+      var section = e.target.closest('.category');
+      if (!section) return;
+      catDragId = section.dataset.category;
+      catDragActive = true;
+      section.classList.add('cat-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/x-cat-id', catDragId);
+      e.stopPropagation();
+    });
+
+    app.addEventListener('dragover', function(e) {
+      if (!catDragId) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      document.querySelectorAll('.category').forEach(function(s) {
+        s.classList.remove('cat-drag-over-left', 'cat-drag-over-right');
+      });
+      var section = e.target.closest('.category');
+      if (section && section.dataset.category !== catDragId) {
+        var rect = section.getBoundingClientRect();
+        var mid = rect.left + rect.width / 2;
+        section.classList.add(e.clientX < mid ? 'cat-drag-over-left' : 'cat-drag-over-right');
+      }
+    });
+
+    app.addEventListener('drop', function(e) {
+      if (!catDragId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var section = e.target.closest('.category');
+      if (section && section.dataset.category !== catDragId) {
+        var rect = section.getBoundingClientRect();
+        var mid = rect.left + rect.width / 2;
+        var insertBefore = e.clientX < mid;
+        var orderedIds = categories.map(function(c) { return c.id; });
+        // Remove dragged from current position
+        var fromIdx = orderedIds.indexOf(catDragId);
+        if (fromIdx > -1) orderedIds.splice(fromIdx, 1);
+        // Find target position
+        var toIdx = orderedIds.indexOf(section.dataset.category);
+        if (!insertBefore) toIdx++;
+        orderedIds.splice(toIdx, 0, catDragId);
+        reorderCategories(orderedIds);
+        render();
+      }
+      catDragId = null;
+      catDragActive = false;
+    });
+
+    app.addEventListener('dragend', function() {
+      if (!catDragId) return;
+      document.querySelectorAll('.category').forEach(function(s) {
+        s.classList.remove('cat-dragging', 'cat-drag-over-left', 'cat-drag-over-right');
+        s.setAttribute('draggable', 'false');
+      });
+      catDragId = null;
+      catDragActive = false;
+    });
+
+    // Touch-based category reorder
+    var catTouchId = null;
+    var catGhost = null;
+    var catLastEl = null;
+
+    app.addEventListener('touchstart', function(e) {
+      var handle = e.target.closest('.cat-drag-handle');
+      if (!handle) return;
+      var section = handle.closest('.category');
+      if (!section) return;
+      catTouchId = section.dataset.category;
+      section.classList.add('cat-dragging');
+      catGhost = document.createElement('div');
+      catGhost.className = 'drag-ghost';
+      catGhost.style.setProperty('--cat-color', getComputedStyle(section).getPropertyValue('--cat-color'));
+      var cat = categories.find(function(c) { return c.id === catTouchId; });
+      catGhost.textContent = cat ? cat.icon + ' ' + cat.name : '';
+      catGhost.style.left = '16px';
+      catGhost.style.top = (e.touches[0].clientY - 20) + 'px';
+      document.body.appendChild(catGhost);
+      e.preventDefault();
+    }, { passive: false });
+
+    app.addEventListener('touchmove', function(e) {
+      if (!catTouchId || !catGhost) return;
+      e.preventDefault();
+      var touch = e.touches[0];
+      catGhost.style.top = (touch.clientY - 20) + 'px';
+      catGhost.style.display = 'none';
+      var el = document.elementFromPoint(touch.clientX, touch.clientY);
+      catGhost.style.display = '';
+      document.querySelectorAll('.category').forEach(function(s) {
+        s.classList.remove('cat-drag-over-left', 'cat-drag-over-right');
+      });
+      catLastEl = el;
+      if (el) {
+        var section = el.closest('.category');
+        if (section && section.dataset.category !== catTouchId) {
+          var rect = section.getBoundingClientRect();
+          var mid = rect.left + rect.width / 2;
+          section.classList.add(touch.clientX < mid ? 'cat-drag-over-left' : 'cat-drag-over-right');
+        }
+      }
+    }, { passive: false });
+
+    app.addEventListener('touchend', function(e) {
+      if (!catTouchId) return;
+      if (catLastEl) {
+        var section = catLastEl.closest('.category');
+        if (section && section.dataset.category !== catTouchId) {
+          var rect = section.getBoundingClientRect();
+          var touch = e.changedTouches && e.changedTouches[0];
+          var clientX = touch ? touch.clientX : rect.left;
+          var mid = rect.left + rect.width / 2;
+          var insertBefore = clientX < mid;
+          var orderedIds = categories.map(function(c) { return c.id; });
+          var fromIdx = orderedIds.indexOf(catTouchId);
+          if (fromIdx > -1) orderedIds.splice(fromIdx, 1);
+          var toIdx = orderedIds.indexOf(section.dataset.category);
+          if (!insertBefore) toIdx++;
+          orderedIds.splice(toIdx, 0, catTouchId);
+          reorderCategories(orderedIds);
+          render();
+        }
+      }
+      document.querySelectorAll('.category').forEach(function(s) {
+        s.classList.remove('cat-dragging', 'cat-drag-over-left', 'cat-drag-over-right');
+      });
+      if (catGhost && catGhost.parentNode) catGhost.parentNode.removeChild(catGhost);
+      catGhost = null;
+      catTouchId = null;
+      catLastEl = null;
+    });
+  })();
+
   // --- Event Delegation ---
   document.getElementById('app').addEventListener('click', function(e) {
     // Inline task check in collapsed header — must come before header expand/collapse
@@ -2014,6 +2333,21 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       return;
     }
 
+    // Category edit button
+    var catEditBtn = e.target.closest('.cat-edit-btn');
+    if (catEditBtn) {
+      e.stopPropagation();
+      openCatModal('edit', catEditBtn.dataset.catId);
+      return;
+    }
+
+    // Add category
+    var addCatBtn = e.target.closest('.add-category-card');
+    if (addCatBtn) {
+      openCatModal('add');
+      return;
+    }
+
     // Add task
     const addBtn = e.target.closest('.add-task-btn');
     if (addBtn) {
@@ -2069,12 +2403,94 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     if (btn) setActiveType(btn.dataset.type);
   });
 
+  // --- Category Modal ---
+  var editingCatId = null;
+
+  function openCatModal(mode, catId) {
+    editingCatId = (mode === 'edit') ? catId : null;
+    var overlay = document.getElementById('cat-modal-overlay');
+    var titleEl = document.getElementById('cat-modal-title');
+    var deleteBtn = document.getElementById('cat-btn-delete');
+
+    titleEl.textContent = mode === 'edit' ? 'Edit Category' : 'Add Category';
+    deleteBtn.classList.toggle('hidden', mode !== 'edit');
+
+    document.getElementById('cat-form').reset();
+
+    // Build color swatches
+    var swatchContainer = document.getElementById('color-swatches');
+    swatchContainer.textContent = '';
+    var selectedColor = CATEGORY_COLORS[0];
+    if (mode === 'edit') {
+      var cat = categories.find(function(c) { return c.id === catId; });
+      if (cat) {
+        document.getElementById('cat-input-name').value = cat.name;
+        document.getElementById('cat-input-icon').value = cat.icon;
+        selectedColor = cat.color;
+      }
+    }
+    CATEGORY_COLORS.forEach(function(color) {
+      var sw = document.createElement('span');
+      sw.className = 'color-swatch' + (color === selectedColor ? ' active' : '');
+      sw.style.background = color;
+      sw.dataset.color = color;
+      sw.addEventListener('click', function() {
+        swatchContainer.querySelectorAll('.color-swatch').forEach(function(s) { s.classList.remove('active'); });
+        sw.classList.add('active');
+      });
+      swatchContainer.appendChild(sw);
+    });
+
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    setTimeout(function() { document.getElementById('cat-input-name').focus(); }, 100);
+  }
+
+  function closeCatModal() {
+    document.getElementById('cat-modal-overlay').classList.remove('open');
+    document.body.style.overflow = '';
+    editingCatId = null;
+  }
+
+  document.getElementById('cat-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var name = document.getElementById('cat-input-name').value.trim();
+    if (!name) return;
+    var icon = document.getElementById('cat-input-icon').value.trim() || '\uD83D\uDCC1';
+    var activeSwatch = document.querySelector('.color-swatch.active');
+    var color = activeSwatch ? activeSwatch.dataset.color : CATEGORY_COLORS[0];
+
+    if (editingCatId) {
+      updateCategory(editingCatId, { name: name, icon: icon, color: color });
+    } else {
+      addCategory(name, icon, color);
+    }
+    closeCatModal();
+    render();
+  });
+
+  document.getElementById('cat-btn-cancel').addEventListener('click', closeCatModal);
+
+  document.getElementById('cat-btn-delete').addEventListener('click', function() {
+    if (editingCatId) {
+      if (deleteCategory(editingCatId)) {
+        closeCatModal();
+        render();
+      }
+    }
+  });
+
+  document.getElementById('cat-modal-overlay').addEventListener('click', function(e) {
+    if (e.target === this) closeCatModal();
+  });
+
   // --- Export / Import ---
   document.getElementById('btn-export').addEventListener('click', function() {
     var data = {
       version: CURRENT_VERSION,
       exportedAt: new Date().toISOString(),
-      tasks: tasks
+      tasks: tasks,
+      categories: categories
     };
     var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
@@ -2107,6 +2523,10 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         if (!confirm('Replace all current tasks with ' + imported.length + ' tasks from backup?')) return;
         tasks = imported;
         saveTasks();
+        if (Array.isArray(data.categories) && data.categories.length > 0) {
+          categories = data.categories;
+          saveCategories();
+        }
         render();
       } catch (err) {
         alert('Could not read backup file: ' + err.message);
@@ -2128,6 +2548,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 
   // --- Init ---
   function init() {
+    loadCategories();
     loadTasks();
     render();
     startMidnightChecker();
