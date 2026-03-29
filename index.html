@@ -5,29 +5,34 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="theme-color" content="#0f172a">
+<meta name="theme-color" content="#0a1410">
 <title>Next Action</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #0f172a;
-  --surface: #1e293b;
-  --surface-hover: #334155;
-  --text: #f1f5f9;
-  --text-muted: #94a3b8;
-  --border: #334155;
+  --bg: #0a1410;
+  --surface: rgba(16, 32, 28, 0.75);
+  --surface-hover: rgba(22, 46, 38, 0.85);
+  --text: #e0f2ec;
+  --text-muted: #6faa96;
+  --border: rgba(40, 80, 68, 0.6);
   --radius: 12px;
   --fitness: #22c55e;
-  --work: #3b82f6;
-  --personal: #f59e0b;
-  --education: #a855f7;
-  --danger: #ef4444;
+  --work: #00d4aa;
+  --personal: #38bdf8;
+  --education: #a78bfa;
+  --danger: #f43f5e;
+  --glow: rgba(0, 212, 170, 0.15);
 }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   background: var(--bg);
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(0, 180, 140, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(0, 120, 100, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(0, 80, 60, 0.05) 0%, transparent 50%);
   color: var(--text);
   min-height: 100vh;
   min-height: 100dvh;
@@ -85,10 +90,13 @@ header .date {
 /* Category cards */
 .category {
   background: var(--surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: var(--radius);
   margin-bottom: 8px;
   overflow: hidden;
   border-left: 4px solid var(--cat-color);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.04);
 }
 @media (min-width: 640px) {
   .category { margin-bottom: 0; }
@@ -325,9 +333,9 @@ header .date {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.6);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   z-index: 1000;
   justify-content: center;
   align-items: flex-end;
@@ -341,7 +349,10 @@ header .date {
 }
 
 .modal-content {
-  background: var(--surface);
+  background: rgba(14, 28, 24, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
   width: 100%;
   max-width: 480px;
   border-radius: var(--radius) var(--radius) 0 0;
@@ -350,6 +361,7 @@ header .date {
   max-height: 90dvh;
   overflow-y: auto;
   animation: slideUp 0.25s ease;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
 }
 @media (min-width: 640px) {
   .modal-content { border-radius: var(--radius); }
@@ -381,7 +393,7 @@ header .date {
 .form-input, .form-select {
   width: 100%;
   padding: 10px 12px;
-  background: var(--bg);
+  background: rgba(10, 20, 16, 0.8);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);
@@ -391,10 +403,11 @@ header .date {
   transition: border-color 0.15s;
 }
 .form-input:focus, .form-select:focus {
-  border-color: var(--text-muted);
+  border-color: var(--work);
+  box-shadow: 0 0 0 2px var(--glow);
 }
 .form-select { cursor: pointer; }
-.form-select option { background: var(--surface); }
+.form-select option { background: #0e1c18; }
 
 .day-toggles {
   display: flex;
@@ -416,7 +429,7 @@ header .date {
 .day-toggle.active {
   background: var(--work);
   border-color: var(--work);
-  color: #fff;
+  color: #0a1410;
 }
 
 .modal-actions {
@@ -437,7 +450,7 @@ header .date {
   transition: opacity 0.15s;
 }
 .btn:active { opacity: 0.8; }
-.btn-primary { background: var(--work); color: #fff; }
+.btn-primary { background: var(--work); color: #0a1410; font-weight: 700; }
 .btn-secondary { background: var(--surface-hover); color: var(--text); }
 .btn-danger { background: var(--danger); color: #fff; }
 
@@ -448,12 +461,14 @@ header .date {
   position: fixed;
   pointer-events: none;
   z-index: 999;
-  background: var(--surface);
+  background: rgba(14, 28, 24, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: 8px;
   padding: 10px 16px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 12px var(--glow);
   font-size: 0.9rem;
-  opacity: 0.9;
+  opacity: 0.95;
   max-width: 280px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -464,7 +479,7 @@ header .date {
 /* Urgency dots */
 .urgency-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
 .urgency-dot.low { background: #64748b; }
-.urgency-dot.medium { background: #3b82f6; }
+.urgency-dot.medium { background: #00d4aa; }
 .urgency-dot.high { background: #f59e0b; }
 .urgency-dot.critical { background: #ef4444; animation: pulse 2s infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
@@ -478,21 +493,21 @@ header .date {
   transition: all 0.15s;
 }
 .urgency-btn.active[data-urgency="low"] { background: #64748b; border-color: #64748b; color: #fff; }
-.urgency-btn.active[data-urgency="medium"] { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+.urgency-btn.active[data-urgency="medium"] { background: #00d4aa; border-color: #00d4aa; color: #0a1410; }
 .urgency-btn.active[data-urgency="high"] { background: #f59e0b; border-color: #f59e0b; color: #fff; }
 .urgency-btn.active[data-urgency="critical"] { background: #ef4444; border-color: #ef4444; color: #fff; }
 
 /* Due date badge */
 .due-badge { font-size: 0.7rem; padding: 2px 7px; border-radius: 10px; white-space: nowrap; flex-shrink: 0; }
 .due-badge.upcoming { background: rgba(255,255,255,0.08); color: var(--text-muted); }
-.due-badge.today { background: rgba(59,130,246,0.2); color: #3b82f6; }
-.due-badge.overdue { background: rgba(239,68,68,0.2); color: #ef4444; }
+.due-badge.today { background: rgba(0,212,170,0.2); color: #00d4aa; }
+.due-badge.overdue { background: rgba(244,63,94,0.2); color: #f43f5e; }
 
 /* Notes area */
 .task-notes-wrap { overflow: hidden; max-height: 0; transition: max-height 0.25s ease; }
 .task-notes-wrap.open { max-height: 500px; }
 .task-notes { padding: 6px 8px 10px 46px; font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; word-break: break-word; }
-.task-notes a { color: var(--work); text-decoration: underline; }
+.task-notes a { color: #00d4aa; text-decoration: underline; }
 .notes-icon {
   color: var(--text-muted); font-size: 0.85rem; flex-shrink: 0; cursor: pointer;
   padding: 4px; min-width: 28px; min-height: 44px; display: flex;
@@ -593,7 +608,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   transition: all 0.15s;
 }
 .type-btn.active {
-  background: var(--work); border-color: var(--work); color: #fff;
+  background: var(--work); border-color: var(--work); color: #0a1410;
 }
 </style>
 </head>
@@ -739,7 +754,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   let lastDateStr = '';
 
   const URGENCY_WEIGHTS = { critical: 0, high: 1, medium: 2, low: 3 };
-  const URGENCY_COLORS = { low: '#64748b', medium: '#3b82f6', high: '#f59e0b', critical: '#ef4444' };
+  const URGENCY_COLORS = { low: '#64748b', medium: '#00d4aa', high: '#f59e0b', critical: '#f43f5e' };
 
   // --- Date Utilities ---
   function getTodayStr() {
