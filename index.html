@@ -474,6 +474,69 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   opacity: 0.5;
   transition: opacity 0.3s;
 }
+
+/* Project expand arrow */
+.project-expand-arrow {
+  cursor: pointer; flex-shrink: 0; font-size: 0.7rem;
+  color: var(--text-muted); transition: transform 0.2s;
+  padding: 4px; min-width: 28px; min-height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none;
+}
+.project-expand-arrow:hover { color: var(--text); }
+.task-wrapper[data-expanded="true"] .project-expand-arrow {
+  transform: rotate(90deg);
+}
+
+/* Progress bar */
+.project-progress {
+  display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+}
+.progress-bar {
+  width: 48px; height: 4px; background: rgba(255,255,255,0.1);
+  border-radius: 2px; overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%; border-radius: 2px;
+  background: var(--cat-color); transition: width 0.3s;
+}
+.progress-text {
+  font-size: 0.7rem; color: var(--text-muted); white-space: nowrap;
+}
+
+/* Subtask indentation */
+.subtask-item .task-item {
+  padding-left: 32px;
+}
+.subtask-list {
+  border-left: 2px solid rgba(255,255,255,0.06);
+  margin-left: 20px;
+}
+
+/* Add sub-task button */
+.add-subtask-btn {
+  display: block; width: calc(100% - 40px); margin: 2px 8px 8px 32px;
+  padding: 6px 10px; background: rgba(255,255,255,0.02);
+  border: 1px dashed var(--border); border-radius: 6px;
+  color: var(--text-muted); font-size: 0.8rem; cursor: pointer;
+  min-height: 36px; font-family: inherit;
+  transition: background 0.15s, border-color 0.15s;
+}
+.add-subtask-btn:hover {
+  background: rgba(255,255,255,0.06); border-color: var(--cat-color); color: var(--text);
+}
+
+/* Type toggle in modal */
+.type-toggles { display: flex; gap: 6px; }
+.type-btn {
+  flex: 1; padding: 8px; border-radius: 8px; border: 2px solid var(--border);
+  background: transparent; color: var(--text-muted); font-size: 0.85rem;
+  font-weight: 600; cursor: pointer; min-height: 40px; font-family: inherit;
+  transition: all 0.15s;
+}
+.type-btn.active {
+  background: var(--work); border-color: var(--work); color: #fff;
+}
 </style>
 </head>
 <body>
@@ -497,6 +560,13 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       <div class="form-group">
         <label for="input-title">Task</label>
         <input type="text" id="input-title" class="form-input" placeholder="What needs to be done?" required autocomplete="off">
+      </div>
+      <div class="form-group" id="project-group">
+        <label>Type</label>
+        <div class="type-toggles" id="type-toggles">
+          <button type="button" class="type-btn active" data-type="task">Task</button>
+          <button type="button" class="type-btn" data-type="project">Project</button>
+        </div>
       </div>
       <div class="form-group" id="category-group">
         <label for="input-category">Category</label>
@@ -605,7 +675,9 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   let tasks = [];
   let expandedCategories = new Set();
   let expandedNotes = new Set();
+  let expandedProjects = new Set();
   let editingTaskId = null;
+  let modalParentId = null;
   let lastDateStr = '';
 
   const URGENCY_WEIGHTS = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -682,7 +754,14 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     const now = Date.now();
     const day90 = 90 * 86400000;
     const day30 = 30 * 86400000;
+    // Collect active project IDs (incomplete projects)
+    var activeProjectIds = new Set();
+    tasks.forEach(function(t) {
+      if (t.isProject && (!t.completions.length || t.recurring)) activeProjectIds.add(t.id);
+    });
     tasks = tasks.filter(function(t) {
+      // Don't prune subtasks of active projects
+      if (t.parentId && activeProjectIds.has(t.parentId)) return true;
       if (!t.recurring && t.completions.length > 0) {
         const completedDate = new Date(t.completions[0] + 'T00:00:00').getTime();
         return (now - completedDate) < day30;
@@ -704,10 +783,19 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     return w;
   }
 
+  function getEffectiveDueDate(task) {
+    if (task.dueDate) return task.dueDate;
+    if (task.parentId) {
+      var parent = tasks.find(function(t) { return t.id === task.parentId; });
+      return parent ? parent.dueDate : null;
+    }
+    return null;
+  }
+
   function getVisibleTasks(category) {
     const todayStr = getTodayStr();
     return tasks
-      .filter(function(t) { return t.category === category && isTaskVisible(t, todayStr); })
+      .filter(function(t) { return t.category === category && !t.parentId && isTaskVisible(t, todayStr); })
       .sort(function(a, b) {
         // 1. Soonest due date first (tasks with due dates before those without)
         var aDue = a.dueDate || '';
@@ -727,6 +815,39 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       });
   }
 
+  function getVisibleSubtasks(projectId) {
+    var todayStr = getTodayStr();
+    var project = tasks.find(function(t) { return t.id === projectId; });
+    var order = (project && project.subtaskOrder) || [];
+    return tasks
+      .filter(function(t) { return t.parentId === projectId && isTaskVisible(t, todayStr); })
+      .sort(function(a, b) {
+        var ai = order.indexOf(a.id);
+        var bi = order.indexOf(b.id);
+        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+      });
+  }
+
+  function getAllSubtasks(projectId) {
+    return tasks.filter(function(t) { return t.parentId === projectId; });
+  }
+
+  function getSubtaskProgress(projectId) {
+    var todayStr = getTodayStr();
+    var subs = getAllSubtasks(projectId);
+    var done = subs.filter(function(t) {
+      if (!t.recurring) return t.completions.length > 0;
+      return t.completions.includes(todayStr);
+    }).length;
+    return { done: done, total: subs.length };
+  }
+
+  function getNextAction(task) {
+    if (!task.isProject) return task;
+    var subs = getVisibleSubtasks(task.id);
+    return subs.length > 0 ? subs[0] : task;
+  }
+
   function getTasksByCategory(category) {
     return tasks
       .filter(function(t) { return t.category === category; })
@@ -740,7 +861,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   }
 
   // --- CRUD ---
-  function createTask(title, category, recurring, urgency, dueDate, notes) {
+  function createTask(title, category, recurring, urgency, dueDate, notes, isProject, parentId) {
     var id;
     if (typeof crypto !== 'undefined' && crypto.randomUUID) {
       id = crypto.randomUUID();
@@ -757,9 +878,16 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       sortOrder: nextSortOrder(category),
       urgency: urgency || 'medium',
       dueDate: dueDate || null,
-      notes: notes || ''
+      notes: notes || '',
+      isProject: !!isProject,
+      parentId: parentId || null,
+      subtaskOrder: []
     };
     tasks.push(task);
+    if (parentId) {
+      var parent = tasks.find(function(t) { return t.id === parentId; });
+      if (parent) parent.subtaskOrder.push(id);
+    }
     saveTasks();
     return task;
   }
@@ -772,7 +900,20 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   }
 
   function deleteTask(id) {
-    tasks = tasks.filter(function(t) { return t.id !== id; });
+    var task = tasks.find(function(t) { return t.id === id; });
+    if (task && task.isProject) {
+      // Cascade delete all subtasks
+      tasks = tasks.filter(function(t) { return t.parentId !== id && t.id !== id; });
+    } else {
+      // Remove subtask from parent's subtaskOrder
+      if (task && task.parentId) {
+        var parent = tasks.find(function(t) { return t.id === task.parentId; });
+        if (parent) {
+          parent.subtaskOrder = parent.subtaskOrder.filter(function(sid) { return sid !== id; });
+        }
+      }
+      tasks = tasks.filter(function(t) { return t.id !== id; });
+    }
     saveTasks();
   }
 
@@ -784,6 +925,19 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       task.completions.push(todayStr);
     }
     saveTasks();
+    // Auto-complete project when all subtasks are done
+    if (task.parentId) {
+      var progress = getSubtaskProgress(task.parentId);
+      if (progress.total > 0 && progress.done === progress.total) {
+        if (confirm('All sub-tasks complete! Mark project as done?')) {
+          var parent = tasks.find(function(t) { return t.id === task.parentId; });
+          if (parent && !parent.completions.includes(todayStr)) {
+            parent.completions.push(todayStr);
+            saveTasks();
+          }
+        }
+      }
+    }
   }
 
   function reorderCategory(category, orderedIds) {
@@ -792,6 +946,14 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       if (task) task.sortOrder = i;
     });
     saveTasks();
+  }
+
+  function reorderSubtasks(projectId, orderedIds) {
+    var project = tasks.find(function(t) { return t.id === projectId; });
+    if (project) {
+      project.subtaskOrder = orderedIds;
+      saveTasks();
+    }
   }
 
   // --- Helpers ---
@@ -859,11 +1021,16 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       const preview = document.createElement('span');
       preview.className = 'next-preview';
       if (nextTask) {
+        var previewTask = getNextAction(nextTask);
         var dot = document.createElement('span');
         dot.className = 'preview-dot';
-        dot.style.background = URGENCY_COLORS[nextTask.urgency] || URGENCY_COLORS.medium;
+        dot.style.background = URGENCY_COLORS[previewTask.urgency] || URGENCY_COLORS.medium;
         preview.appendChild(dot);
-        preview.appendChild(document.createTextNode(nextTask.title));
+        var previewText = previewTask.title;
+        if (nextTask.isProject && previewTask.id !== nextTask.id) {
+          previewText = nextTask.title + ': ' + previewTask.title;
+        }
+        preview.appendChild(document.createTextNode(previewText));
       } else if (!expandedCategories.has(cat.id)) {
         preview.textContent = 'No tasks';
       }
@@ -893,6 +1060,32 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       } else {
         visible.forEach(function(task, idx) {
           list.appendChild(renderTaskItem(task, idx === 0));
+          // Render subtasks if this is an expanded project
+          if (task.isProject && expandedProjects.has(task.id)) {
+            var subtasks = getVisibleSubtasks(task.id);
+            var subtaskList = document.createElement('div');
+            subtaskList.className = 'subtask-list task-list';
+            subtaskList.dataset.projectId = task.id;
+            subtaskList.dataset.category = cat.id;
+            if (subtasks.length === 0) {
+              var emptyS = document.createElement('div');
+              emptyS.className = 'empty-msg';
+              emptyS.textContent = 'No sub-tasks yet';
+              subtaskList.appendChild(emptyS);
+            } else {
+              subtasks.forEach(function(sub) {
+                subtaskList.appendChild(renderTaskItem(sub, false, true));
+              });
+            }
+            list.appendChild(subtaskList);
+            var addSubBtn = document.createElement('button');
+            addSubBtn.className = 'add-subtask-btn';
+            addSubBtn.dataset.projectId = task.id;
+            addSubBtn.textContent = '+ Add Sub-task';
+            list.appendChild(addSubBtn);
+            initDragDesktop(subtaskList);
+            initDragTouch(subtaskList);
+          }
         });
       }
 
@@ -912,11 +1105,14 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     });
   }
 
-  function renderTaskItem(task, isFirst) {
+  function renderTaskItem(task, isFirst, isSubtask) {
     var todayStr = getTodayStr();
     var wrapper = document.createElement('div');
-    wrapper.className = 'task-wrapper';
+    wrapper.className = 'task-wrapper' + (isSubtask ? ' subtask-item' : '');
     wrapper.dataset.id = task.id;
+    if (task.isProject) {
+      wrapper.dataset.expanded = expandedProjects.has(task.id) ? 'true' : 'false';
+    }
 
     const li = document.createElement('div');
     li.className = 'task-item' + (isFirst ? ' first-task' : '');
@@ -930,19 +1126,47 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     var urgDot = document.createElement('span');
     urgDot.className = 'urgency-dot ' + (task.urgency || 'medium');
 
-    const check = document.createElement('input');
-    check.type = 'checkbox';
-    check.className = 'task-check';
-    check.setAttribute('aria-label', 'Complete ' + task.title);
+    li.appendChild(handle);
+    li.appendChild(urgDot);
+
+    if (task.isProject) {
+      // Project: expand arrow instead of checkbox
+      var projArrow = document.createElement('button');
+      projArrow.className = 'project-expand-arrow';
+      projArrow.setAttribute('aria-label', 'Expand project');
+      projArrow.textContent = '\u25B6';
+      li.appendChild(projArrow);
+    } else {
+      const check = document.createElement('input');
+      check.type = 'checkbox';
+      check.className = 'task-check';
+      check.setAttribute('aria-label', 'Complete ' + task.title);
+      li.appendChild(check);
+    }
 
     const title = document.createElement('span');
     title.className = 'task-title';
     title.textContent = task.title;
-
-    li.appendChild(handle);
-    li.appendChild(urgDot);
-    li.appendChild(check);
     li.appendChild(title);
+
+    // Project progress indicator
+    if (task.isProject) {
+      var progress = getSubtaskProgress(task.id);
+      var progressEl = document.createElement('span');
+      progressEl.className = 'project-progress';
+      var bar = document.createElement('span');
+      bar.className = 'progress-bar';
+      var fill = document.createElement('span');
+      fill.className = 'progress-bar-fill';
+      fill.style.width = (progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0) + '%';
+      bar.appendChild(fill);
+      var text = document.createElement('span');
+      text.className = 'progress-text';
+      text.textContent = progress.done + '/' + progress.total;
+      progressEl.appendChild(bar);
+      progressEl.appendChild(text);
+      li.appendChild(progressEl);
+    }
 
     const label = getRecurrenceLabel(task);
     if (label) {
@@ -952,11 +1176,15 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       li.appendChild(badge);
     }
 
-    var dueInfo = formatDueDate(task.dueDate, todayStr);
+    var effectiveDue = isSubtask ? getEffectiveDueDate(task) : task.dueDate;
+    var dueInfo = formatDueDate(effectiveDue, todayStr);
     if (dueInfo) {
       var dueBadge = document.createElement('span');
       dueBadge.className = 'due-badge ' + dueInfo.cls;
       dueBadge.textContent = dueInfo.text;
+      if (isSubtask && !task.dueDate && effectiveDue) {
+        dueBadge.style.opacity = '0.6';
+      }
       li.appendChild(dueBadge);
     }
 
@@ -992,22 +1220,64 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   }
 
   // --- Modal ---
-  function openModal(mode, task, defaultCategory) {
+  function setActiveType(type) {
+    document.querySelectorAll('.type-btn').forEach(function(btn) {
+      btn.classList.toggle('active', btn.dataset.type === type);
+    });
+    var isProject = (type === 'project');
+    var recurrenceGroup = document.getElementById('input-recurrence').closest('.form-group');
+    recurrenceGroup.classList.toggle('hidden', isProject);
+    if (isProject) {
+      document.getElementById('weekly-group').classList.add('hidden');
+      document.getElementById('custom-group').classList.add('hidden');
+    }
+  }
+
+  function getActiveType() {
+    var active = document.querySelector('.type-btn.active');
+    return active ? active.dataset.type : 'task';
+  }
+
+  function openModal(mode, task, defaultCategory, parentId) {
     editingTaskId = (mode === 'edit' && task) ? task.id : null;
+    modalParentId = parentId || null;
     const overlay = document.getElementById('modal-overlay');
     const titleEl = document.getElementById('modal-title');
     const form = document.getElementById('task-form');
     const deleteBtn = document.getElementById('btn-delete');
     const categoryGroup = document.getElementById('category-group');
+    const projectGroup = document.getElementById('project-group');
+    var recurrenceGroup = document.getElementById('input-recurrence').closest('.form-group');
 
-    titleEl.textContent = mode === 'edit' ? 'Edit Task' : 'Add Task';
-    deleteBtn.classList.toggle('hidden', mode !== 'edit');
+    // Reset visibility
+    categoryGroup.classList.remove('hidden');
+    projectGroup.classList.remove('hidden');
+    recurrenceGroup.classList.remove('hidden');
 
     form.reset();
     clearDayToggles();
     setActiveUrgency('medium');
+    setActiveType('task');
     document.getElementById('input-due-date').value = '';
     document.getElementById('input-notes').value = '';
+
+    if (modalParentId) {
+      // Sub-task mode
+      titleEl.textContent = mode === 'edit' ? 'Edit Sub-task' : 'Add Sub-task';
+      categoryGroup.classList.add('hidden');
+      projectGroup.classList.add('hidden');
+    } else if (mode === 'edit') {
+      titleEl.textContent = task && task.parentId ? 'Edit Sub-task' : 'Edit Task';
+      if (task && task.parentId) {
+        categoryGroup.classList.add('hidden');
+        projectGroup.classList.add('hidden');
+        modalParentId = task.parentId;
+      }
+    } else {
+      titleEl.textContent = 'Add Task';
+    }
+
+    deleteBtn.classList.toggle('hidden', mode !== 'edit');
 
     if (mode === 'edit' && task) {
       document.getElementById('input-title').value = task.title;
@@ -1015,6 +1285,9 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       setActiveUrgency(task.urgency || 'medium');
       document.getElementById('input-due-date').value = task.dueDate || '';
       document.getElementById('input-notes').value = task.notes || '';
+      if (task.isProject) {
+        setActiveType('project');
+      }
       if (task.recurring) {
         document.getElementById('input-recurrence').value = task.recurring.type;
         if (task.recurring.type === 'weekly') {
@@ -1032,7 +1305,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       document.getElementById('input-category').value = defaultCategory;
     }
 
-    updateRecurrenceUI();
+    if (!modalParentId) updateRecurrenceUI();
     overlay.classList.add('open');
     document.body.style.overflow = 'hidden';
     setTimeout(function() {
@@ -1044,6 +1317,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     document.getElementById('modal-overlay').classList.remove('open');
     document.body.style.overflow = '';
     editingTaskId = null;
+    modalParentId = null;
   }
 
   function updateRecurrenceUI() {
@@ -1098,21 +1372,45 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     e.preventDefault();
     const title = document.getElementById('input-title').value.trim();
     if (!title) return;
-    const category = document.getElementById('input-category').value;
-    const recurring = buildRecurring();
     const urgency = getActiveUrgency();
     const dueDate = document.getElementById('input-due-date').value || null;
     const notes = document.getElementById('input-notes').value.trim();
+    var isProject = getActiveType() === 'project';
+    var recurring = isProject ? null : buildRecurring();
 
     if (editingTaskId) {
-      updateTask(editingTaskId, {
-        title: title, category: category, recurring: recurring,
-        urgency: urgency, dueDate: dueDate, notes: notes
-      });
+      var editTask = tasks.find(function(t) { return t.id === editingTaskId; });
+      var updates = {
+        title: title, urgency: urgency, dueDate: dueDate, notes: notes
+      };
+      if (!editTask.parentId && !modalParentId) {
+        updates.category = document.getElementById('input-category').value;
+        updates.isProject = isProject;
+        updates.recurring = recurring;
+        if (isProject) updates.recurring = null;
+      } else {
+        updates.recurring = recurring;
+      }
+      updateTask(editingTaskId, updates);
+    } else if (modalParentId) {
+      // Creating a subtask
+      var parentTask = tasks.find(function(t) { return t.id === modalParentId; });
+      var category = parentTask ? parentTask.category : document.getElementById('input-category').value;
+      createTask(title, category, recurring, urgency, dueDate, notes, false, modalParentId);
+      expandedProjects.add(modalParentId);
+      if (parentTask && !expandedCategories.has(parentTask.category)) {
+        expandedCategories.add(parentTask.category);
+      }
     } else {
-      createTask(title, category, recurring, urgency, dueDate, notes);
+      var category = document.getElementById('input-category').value;
+      createTask(title, category, recurring, urgency, dueDate, notes, isProject, null);
       if (!expandedCategories.has(category)) {
         expandedCategories.add(category);
+      }
+      if (isProject) {
+        // Auto-expand the new project
+        var newest = tasks[tasks.length - 1];
+        if (newest) expandedProjects.add(newest.id);
       }
     }
     closeModal();
@@ -1181,8 +1479,14 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   }
 
   function finalizeDrag(listEl, movedId, targetId, insertBefore) {
-    const category = listEl.dataset.category;
-    const visible = getVisibleTasks(category);
+    var projectId = listEl.dataset.projectId;
+    var visible;
+    if (projectId) {
+      visible = getVisibleSubtasks(projectId);
+    } else {
+      var category = listEl.dataset.category;
+      visible = getVisibleTasks(category);
+    }
     const ids = visible.map(function(t) { return t.id; });
     const fromIdx = ids.indexOf(movedId);
     if (fromIdx === -1) return;
@@ -1191,7 +1495,11 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     if (toIdx === -1) return;
     if (!insertBefore) toIdx++;
     ids.splice(toIdx, 0, movedId);
-    reorderCategory(category, ids);
+    if (projectId) {
+      reorderSubtasks(projectId, ids);
+    } else {
+      reorderCategory(listEl.dataset.category, ids);
+    }
     render();
   }
 
@@ -1329,6 +1637,31 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       return;
     }
 
+    // Project expand/collapse
+    var projArrow = e.target.closest('.project-expand-arrow');
+    if (projArrow) {
+      var wrapper = projArrow.closest('.task-wrapper');
+      if (wrapper) {
+        var pid = wrapper.dataset.id;
+        if (expandedProjects.has(pid)) {
+          expandedProjects.delete(pid);
+        } else {
+          expandedProjects.add(pid);
+        }
+        render();
+      }
+      return;
+    }
+
+    // Add sub-task
+    var addSubBtn = e.target.closest('.add-subtask-btn');
+    if (addSubBtn) {
+      var projectId = addSubBtn.dataset.projectId;
+      var project = tasks.find(function(t) { return t.id === projectId; });
+      if (project) openModal('add', null, project.category, projectId);
+      return;
+    }
+
     // Add task
     const addBtn = e.target.closest('.add-task-btn');
     if (addBtn) {
@@ -1376,6 +1709,12 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   document.getElementById('urgency-toggles').addEventListener('click', function(e) {
     const btn = e.target.closest('.urgency-btn');
     if (btn) setActiveUrgency(btn.dataset.urgency);
+  });
+
+  // Type toggle clicks
+  document.getElementById('type-toggles').addEventListener('click', function(e) {
+    var btn = e.target.closest('.type-btn');
+    if (btn) setActiveType(btn.dataset.type);
   });
 
   // --- Export / Import ---
