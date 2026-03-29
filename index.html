@@ -170,6 +170,17 @@ header .date {
 .color-swatch:hover { transform: scale(1.15); }
 .color-swatch.active { border-color: var(--text); }
 
+/* Emoji picker */
+.emoji-picker { display: flex; gap: 6px; flex-wrap: wrap; }
+.emoji-option {
+  width: 36px; height: 36px; border-radius: 8px; border: 2px solid transparent;
+  background: rgba(255,255,255,0.05); cursor: pointer; font-size: 1.2rem;
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color 0.15s, transform 0.15s, background 0.15s;
+}
+.emoji-option:hover { transform: scale(1.15); background: rgba(255,255,255,0.1); }
+.emoji-option.active { border-color: var(--text); background: rgba(255,255,255,0.12); }
+
 .category-header {
   display: flex;
   flex-direction: column;
@@ -778,8 +789,9 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         <input type="text" id="cat-input-name" class="form-input" placeholder="Category name" required autocomplete="off">
       </div>
       <div class="form-group">
-        <label for="cat-input-icon">Icon (emoji)</label>
-        <input type="text" id="cat-input-icon" class="form-input" placeholder="e.g. &#x1F3AF;" autocomplete="off" maxlength="4">
+        <label>Icon</label>
+        <div class="emoji-picker" id="emoji-picker"></div>
+        <input type="hidden" id="cat-input-icon">
       </div>
       <div class="form-group">
         <label>Color</label>
@@ -2421,6 +2433,12 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 
   // --- Category Modal ---
   var editingCatId = null;
+  var CATEGORY_EMOJIS = [
+    '💪', '💼', '🏠', '📚', '🎯', '🏃', '🧘', '🎨', '🎵', '🎮',
+    '💰', '🛒', '🍳', '🧹', '✈️', '🏋️', '❤️', '🧠', '💻', '📱',
+    '📝', '🔧', '🌱', '⭐', '🚀', '🎬', '📷', '🐾', '👨‍👩‍👧‍👦', '🏡',
+    '🚗', '💊', '📦', '🎁', '🔔', '📅', '🗂️', '📁', '🏆', '💡'
+  ];
 
   function openCatModal(mode, catId) {
     editingCatId = (mode === 'edit') ? catId : null;
@@ -2433,18 +2451,37 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 
     document.getElementById('cat-form').reset();
 
-    // Build color swatches
-    var swatchContainer = document.getElementById('color-swatches');
-    swatchContainer.textContent = '';
+    var selectedIcon = CATEGORY_EMOJIS[0];
     var selectedColor = CATEGORY_COLORS[0];
     if (mode === 'edit') {
       var cat = categories.find(function(c) { return c.id === catId; });
       if (cat) {
         document.getElementById('cat-input-name').value = cat.name;
-        document.getElementById('cat-input-icon').value = cat.icon;
+        selectedIcon = cat.icon;
         selectedColor = cat.color;
       }
     }
+    document.getElementById('cat-input-icon').value = selectedIcon;
+
+    // Build emoji picker
+    var emojiContainer = document.getElementById('emoji-picker');
+    emojiContainer.textContent = '';
+    CATEGORY_EMOJIS.forEach(function(emoji) {
+      var em = document.createElement('span');
+      em.className = 'emoji-option' + (emoji === selectedIcon ? ' active' : '');
+      em.textContent = emoji;
+      em.dataset.emoji = emoji;
+      em.addEventListener('click', function() {
+        emojiContainer.querySelectorAll('.emoji-option').forEach(function(s) { s.classList.remove('active'); });
+        em.classList.add('active');
+        document.getElementById('cat-input-icon').value = emoji;
+      });
+      emojiContainer.appendChild(em);
+    });
+
+    // Build color swatches
+    var swatchContainer = document.getElementById('color-swatches');
+    swatchContainer.textContent = '';
     CATEGORY_COLORS.forEach(function(color) {
       var sw = document.createElement('span');
       sw.className = 'color-swatch' + (color === selectedColor ? ' active' : '');
