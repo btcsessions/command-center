@@ -659,9 +659,20 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     return tasks
       .filter(function(t) { return t.category === category && isTaskVisible(t, todayStr); })
       .sort(function(a, b) {
+        // 1. Soonest due date first (tasks with due dates before those without)
+        var aDue = a.dueDate || '';
+        var bDue = b.dueDate || '';
+        if (aDue || bDue) {
+          if (aDue && !bDue) return -1;
+          if (!aDue && bDue) return 1;
+          if (aDue < bDue) return -1;
+          if (aDue > bDue) return 1;
+        }
+        // 2. Same due date (or both none): highest urgency first
         var ua = getUrgencyWeight(a, todayStr);
         var ub = getUrgencyWeight(b, todayStr);
         if (ua !== ub) return ua - ub;
+        // 3. Manual sort order as final tiebreaker
         return a.sortOrder - b.sortOrder;
       });
   }
