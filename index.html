@@ -2259,6 +2259,17 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 
   // --- Event Delegation ---
   document.getElementById('app').addEventListener('click', function(e) {
+    // Category edit button — must come before header expand/collapse
+    var catEditBtn = e.target.closest('.cat-edit-btn');
+    if (catEditBtn) {
+      e.stopPropagation();
+      openCatModal('edit', catEditBtn.dataset.catId);
+      return;
+    }
+
+    // Category drag handle — don't expand/collapse on click
+    if (e.target.closest('.cat-drag-handle')) return;
+
     // Inline task check in collapsed header — must come before header expand/collapse
     var inlineCheck = e.target.closest('.inline-task-check');
     if (inlineCheck) {
@@ -2343,14 +2354,6 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       var projectId = addSubBtn.dataset.projectId;
       var project = tasks.find(function(t) { return t.id === projectId; });
       if (project) openModal('add', null, project.category, projectId);
-      return;
-    }
-
-    // Category edit button
-    var catEditBtn = e.target.closest('.cat-edit-btn');
-    if (catEditBtn) {
-      e.stopPropagation();
-      openCatModal('edit', catEditBtn.dataset.catId);
       return;
     }
 
