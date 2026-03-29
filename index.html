@@ -491,20 +491,31 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   transform: rotate(90deg);
 }
 
+/* Project content column — stacks title row and meta row */
+.project-content {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;
+}
+.project-title-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.project-meta-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+
 /* Progress bar */
 .project-progress {
-  display: flex; align-items: center; gap: 6px; flex-shrink: 1; min-width: 0;
+  display: flex; align-items: center; gap: 6px; flex-shrink: 0;
 }
 .progress-bar {
-  width: 36px; min-width: 20px; height: 4px; background: rgba(255,255,255,0.1);
-  border-radius: 2px; overflow: hidden; flex-shrink: 1;
+  width: 36px; height: 4px; background: rgba(255,255,255,0.1);
+  border-radius: 2px; overflow: hidden;
 }
 .progress-bar-fill {
   height: 100%; border-radius: 2px;
   background: var(--cat-color); transition: width 0.3s;
 }
 .progress-text {
-  font-size: 0.7rem; color: var(--text-muted); white-space: nowrap; flex-shrink: 0;
+  font-size: 0.7rem; color: var(--text-muted); white-space: nowrap;
 }
 
 /* Subtask indentation */
@@ -1147,13 +1158,18 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       li.appendChild(check);
     }
 
-    const title = document.createElement('span');
-    title.className = 'task-title';
-    title.textContent = task.title;
-    li.appendChild(title);
-
-    // Project progress indicator
     if (task.isProject) {
+      // Project: two-row layout (title+progress on top, due date + badges below)
+      var contentCol = document.createElement('div');
+      contentCol.className = 'project-content';
+
+      var titleRow = document.createElement('div');
+      titleRow.className = 'project-title-row';
+      var title = document.createElement('span');
+      title.className = 'task-title';
+      title.textContent = task.title;
+      titleRow.appendChild(title);
+
       var progress = getSubtaskProgress(task.id);
       var progressEl = document.createElement('span');
       progressEl.className = 'project-progress';
@@ -1163,48 +1179,82 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       fill.className = 'progress-bar-fill';
       fill.style.width = (progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0) + '%';
       bar.appendChild(fill);
-      var text = document.createElement('span');
-      text.className = 'progress-text';
-      text.textContent = progress.done + '/' + progress.total;
+      var ptext = document.createElement('span');
+      ptext.className = 'progress-text';
+      ptext.textContent = progress.done + '/' + progress.total;
       progressEl.appendChild(bar);
-      progressEl.appendChild(text);
-      li.appendChild(progressEl);
-    }
+      progressEl.appendChild(ptext);
+      titleRow.appendChild(progressEl);
+      contentCol.appendChild(titleRow);
 
-    const label = getRecurrenceLabel(task);
-    if (label) {
-      const badge = document.createElement('span');
-      badge.className = 'recurrence-badge';
-      badge.textContent = label;
-      li.appendChild(badge);
-    }
-
-    var effectiveDue = isSubtask ? getEffectiveDueDate(task) : task.dueDate;
-    var dueInfo = formatDueDate(effectiveDue, todayStr);
-    if (dueInfo) {
-      var dueBadge = document.createElement('span');
-      dueBadge.className = 'due-badge ' + dueInfo.cls;
-      dueBadge.textContent = dueInfo.text;
-      if (isSubtask && !task.dueDate && effectiveDue) {
-        dueBadge.style.opacity = '0.6';
+      var metaRow = document.createElement('div');
+      metaRow.className = 'project-meta-row';
+      var dueInfo = formatDueDate(task.dueDate, todayStr);
+      if (dueInfo) {
+        var dueBadge = document.createElement('span');
+        dueBadge.className = 'due-badge ' + dueInfo.cls;
+        dueBadge.textContent = dueInfo.text;
+        metaRow.appendChild(dueBadge);
       }
-      li.appendChild(dueBadge);
-    }
+      if (task.notes) {
+        var notesBtn = document.createElement('button');
+        notesBtn.className = 'notes-icon';
+        notesBtn.setAttribute('aria-label', 'Toggle notes');
+        notesBtn.textContent = '\uD83D\uDCDD';
+        notesBtn.dataset.id = task.id;
+        metaRow.appendChild(notesBtn);
+      }
+      if (metaRow.children.length > 0) contentCol.appendChild(metaRow);
 
-    if (task.notes) {
-      var notesBtn = document.createElement('button');
-      notesBtn.className = 'notes-icon';
-      notesBtn.setAttribute('aria-label', 'Toggle notes');
-      notesBtn.textContent = '\uD83D\uDCDD';
-      notesBtn.dataset.id = task.id;
-      li.appendChild(notesBtn);
-    }
+      li.appendChild(contentCol);
 
-    const editBtn = document.createElement('button');
-    editBtn.className = 'task-edit-btn';
-    editBtn.setAttribute('aria-label', 'Edit task');
-    editBtn.textContent = '\u270E';
-    li.appendChild(editBtn);
+      var editBtn = document.createElement('button');
+      editBtn.className = 'task-edit-btn';
+      editBtn.setAttribute('aria-label', 'Edit task');
+      editBtn.textContent = '\u270E';
+      li.appendChild(editBtn);
+    } else {
+      // Regular task / subtask: single-row layout
+      var title = document.createElement('span');
+      title.className = 'task-title';
+      title.textContent = task.title;
+      li.appendChild(title);
+
+      var label = getRecurrenceLabel(task);
+      if (label) {
+        var badge = document.createElement('span');
+        badge.className = 'recurrence-badge';
+        badge.textContent = label;
+        li.appendChild(badge);
+      }
+
+      var effectiveDue = isSubtask ? getEffectiveDueDate(task) : task.dueDate;
+      var dueInfo = formatDueDate(effectiveDue, todayStr);
+      if (dueInfo) {
+        var dueBadge = document.createElement('span');
+        dueBadge.className = 'due-badge ' + dueInfo.cls;
+        dueBadge.textContent = dueInfo.text;
+        if (isSubtask && !task.dueDate && effectiveDue) {
+          dueBadge.style.opacity = '0.6';
+        }
+        li.appendChild(dueBadge);
+      }
+
+      if (task.notes) {
+        var notesBtn = document.createElement('button');
+        notesBtn.className = 'notes-icon';
+        notesBtn.setAttribute('aria-label', 'Toggle notes');
+        notesBtn.textContent = '\uD83D\uDCDD';
+        notesBtn.dataset.id = task.id;
+        li.appendChild(notesBtn);
+      }
+
+      var editBtn = document.createElement('button');
+      editBtn.className = 'task-edit-btn';
+      editBtn.setAttribute('aria-label', 'Edit task');
+      editBtn.textContent = '\u270E';
+      li.appendChild(editBtn);
+    }
 
     wrapper.appendChild(li);
 
