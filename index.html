@@ -96,6 +96,7 @@ header .date {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   scroll-padding: 8px;
+  align-items: flex-start;
 }
 #app::-webkit-scrollbar { display: none; }
 @media (min-width: 640px) {
@@ -171,38 +172,47 @@ header .date {
 
 .category-header {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
   padding: 14px 16px;
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
   transition: background 0.15s;
   min-height: 56px;
+  gap: 0;
 }
 .category-header:hover { background: var(--surface-hover); }
 .category-header:focus-visible { outline: 2px solid var(--cat-color); outline-offset: -2px; }
+
+.category-header-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
 
 .category-icon { font-size: 1.3rem; flex-shrink: 0; }
 .category-name {
   font-weight: 600;
   font-size: 0.95rem;
   white-space: nowrap;
+  flex: 1;
 }
 .next-preview {
-  flex: 1;
-  min-width: 0;
-  text-align: right;
+  width: 100%;
   font-size: 0.85rem;
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  padding-top: 8px;
 }
+.category.expanded .next-preview,
+.category.expanded .inline-task { display: none; }
 /* Inline actionable task in collapsed header */
 .inline-task {
-  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;
-  justify-content: flex-end;
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  padding-top: 8px;
 }
 .inline-task-check {
   appearance: none; -webkit-appearance: none;
@@ -1343,12 +1353,15 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       catEditBtn.textContent = '\u22EF';
       catEditBtn.setAttribute('aria-label', 'Edit category');
 
-      header.appendChild(catDragHandle);
-      header.appendChild(icon);
-      header.appendChild(name);
+      var headerTop = document.createElement('div');
+      headerTop.className = 'category-header-top';
+      headerTop.appendChild(catDragHandle);
+      headerTop.appendChild(icon);
+      headerTop.appendChild(name);
+      headerTop.appendChild(catEditBtn);
+      headerTop.appendChild(arrow);
+      header.appendChild(headerTop);
       header.appendChild(preview);
-      header.appendChild(catEditBtn);
-      header.appendChild(arrow);
 
       // Body
       const body = document.createElement('div');
