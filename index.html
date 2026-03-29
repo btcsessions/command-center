@@ -531,16 +531,24 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 
 /* Subtask indentation */
 .subtask-item .task-item {
-  padding-left: 32px;
+  padding-left: 12px;
 }
 .subtask-list {
   border-left: 2px solid rgba(255,255,255,0.06);
-  margin-left: 20px;
+  margin-left: 8px;
+}
+
+/* Subtask two-row layout */
+.subtask-content {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;
+}
+.subtask-meta-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
 }
 
 /* Add sub-task button */
 .add-subtask-btn {
-  display: block; width: calc(100% - 40px); margin: 2px 8px 8px 32px;
+  display: block; width: calc(100% - 24px); margin: 2px 8px 8px 16px;
   padding: 6px 10px; background: rgba(255,255,255,0.02);
   border: 1px dashed var(--border); border-radius: 6px;
   color: var(--text-muted); font-size: 0.8rem; cursor: pointer;
@@ -1266,8 +1274,56 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       editBtn.setAttribute('aria-label', 'Edit task');
       editBtn.textContent = '\u270E';
       li.appendChild(editBtn);
+    } else if (isSubtask) {
+      // Subtask: two-row layout (title on top, meta below)
+      var contentCol = document.createElement('div');
+      contentCol.className = 'subtask-content';
+
+      var title = document.createElement('span');
+      title.className = 'task-title';
+      title.textContent = task.title;
+      contentCol.appendChild(title);
+
+      var metaRow = document.createElement('div');
+      metaRow.className = 'subtask-meta-row';
+
+      var label = getRecurrenceLabel(task);
+      if (label) {
+        var badge = document.createElement('span');
+        badge.className = 'recurrence-badge';
+        badge.textContent = label;
+        metaRow.appendChild(badge);
+      }
+
+      var effectiveDue = getEffectiveDueDate(task);
+      var dueInfo = formatDueDate(effectiveDue, todayStr);
+      if (dueInfo) {
+        var dueBadge = document.createElement('span');
+        dueBadge.className = 'due-badge ' + dueInfo.cls;
+        dueBadge.textContent = dueInfo.text;
+        if (!task.dueDate && effectiveDue) dueBadge.style.opacity = '0.6';
+        metaRow.appendChild(dueBadge);
+      }
+
+      if (task.notes) {
+        var notesBtn = document.createElement('button');
+        notesBtn.className = 'notes-icon';
+        notesBtn.setAttribute('aria-label', 'Toggle notes');
+        notesBtn.textContent = '\uD83D\uDCDD';
+        notesBtn.dataset.id = task.id;
+        metaRow.appendChild(notesBtn);
+      }
+
+      if (metaRow.children.length > 0) contentCol.appendChild(metaRow);
+      li.appendChild(contentCol);
+
+      var editBtn = document.createElement('button');
+      editBtn.className = 'task-edit-btn';
+      editBtn.setAttribute('aria-label', 'Edit task');
+      editBtn.textContent = '\u270E';
+      li.appendChild(editBtn);
     } else {
-      // Regular task / subtask: single-row layout
+      // Regular top-level task: single-row layout
       var title = document.createElement('span');
       title.className = 'task-title';
       title.textContent = task.title;
@@ -1281,15 +1337,11 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         li.appendChild(badge);
       }
 
-      var effectiveDue = isSubtask ? getEffectiveDueDate(task) : task.dueDate;
-      var dueInfo = formatDueDate(effectiveDue, todayStr);
+      var dueInfo = formatDueDate(task.dueDate, todayStr);
       if (dueInfo) {
         var dueBadge = document.createElement('span');
         dueBadge.className = 'due-badge ' + dueInfo.cls;
         dueBadge.textContent = dueInfo.text;
-        if (isSubtask && !task.dueDate && effectiveDue) {
-          dueBadge.style.opacity = '0.6';
-        }
         li.appendChild(dueBadge);
       }
 
