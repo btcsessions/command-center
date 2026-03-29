@@ -120,6 +120,13 @@ header .date {
   flex: 1 0 280px;
   scroll-snap-align: start;
 }
+@media (max-width: 639px) {
+  .category {
+    min-width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
+    flex: 0 0 calc(100vw - 16px);
+  }
+}
 
 /* Add category card */
 .add-category-card {
