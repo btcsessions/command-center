@@ -38,6 +38,7 @@ body {
 header {
   text-align: center;
   padding: 24px 16px 8px;
+  position: relative;
 }
 header h1 {
   font-size: 1.5rem;
@@ -49,6 +50,24 @@ header .date {
   color: var(--text-muted);
   margin-top: 4px;
 }
+.backup-bar {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+.backup-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s;
+}
+.backup-btn:hover { background: var(--surface-hover); color: var(--text); }
 
 #app {
   padding: 8px;
@@ -462,6 +481,11 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 <header>
   <h1>Next Action</h1>
   <div class="date" id="today-date"></div>
+  <div class="backup-bar">
+    <button class="backup-btn" id="btn-export">Export Backup</button>
+    <button class="backup-btn" id="btn-import">Import Backup</button>
+    <input type="file" id="import-file" accept=".json" class="hidden">
+  </div>
 </header>
 
 <main id="app"></main>
@@ -540,7 +564,34 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 
   const STORAGE_KEY = 'nextaction_tasks';
   const VERSION_KEY = 'nextaction_version';
-  const CURRENT_VERSION = 2;
+  const CURRENT_VERSION = 3;
+
+  // Versioned migration functions: each takes the tasks array and mutates it in place.
+  // When adding a new schema version, add a migration here and bump CURRENT_VERSION.
+  var MIGRATIONS = {
+    // v1 -> v2: add urgency, dueDate, notes
+    2: function(arr) {
+      arr.forEach(function(t) {
+        if (!t.urgency) t.urgency = 'medium';
+        if (t.dueDate === undefined) t.dueDate = null;
+        if (t.notes === undefined) t.notes = '';
+      });
+    },
+    // v2 -> v3: add isProject, parentId, subtaskOrder for project support
+    3: function(arr) {
+      arr.forEach(function(t) {
+        if (t.isProject === undefined) t.isProject = false;
+        if (t.parentId === undefined) t.parentId = null;
+        if (t.subtaskOrder === undefined) t.subtaskOrder = [];
+      });
+    }
+  };
+
+  function runMigrations(arr, fromVersion) {
+    for (var v = fromVersion + 1; v <= CURRENT_VERSION; v++) {
+      if (MIGRATIONS[v]) MIGRATIONS[v](arr);
+    }
+  }
 
   const CATEGORIES = [
     { id: 'fitness',   name: 'Fitness',          icon: '\uD83D\uDCAA' },
@@ -614,12 +665,11 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     } catch (e) {
       tasks = [];
     }
-    // Migrate v1 tasks to v2
-    tasks.forEach(function(t) {
-      if (!t.urgency) t.urgency = 'medium';
-      if (t.dueDate === undefined) t.dueDate = null;
-      if (t.notes === undefined) t.notes = '';
-    });
+    var storedVersion = parseInt(localStorage.getItem(VERSION_KEY), 10) || 1;
+    if (storedVersion < CURRENT_VERSION) {
+      runMigrations(tasks, storedVersion);
+      saveTasks();
+    }
     pruneOldData();
   }
 
@@ -1326,6 +1376,53 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   document.getElementById('urgency-toggles').addEventListener('click', function(e) {
     const btn = e.target.closest('.urgency-btn');
     if (btn) setActiveUrgency(btn.dataset.urgency);
+  });
+
+  // --- Export / Import ---
+  document.getElementById('btn-export').addEventListener('click', function() {
+    var data = {
+      version: CURRENT_VERSION,
+      exportedAt: new Date().toISOString(),
+      tasks: tasks
+    };
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'nextaction-backup-' + getTodayStr() + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  document.getElementById('btn-import').addEventListener('click', function() {
+    document.getElementById('import-file').click();
+  });
+
+  document.getElementById('import-file').addEventListener('change', function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      try {
+        var data = JSON.parse(ev.target.result);
+        var imported = Array.isArray(data.tasks) ? data.tasks : (Array.isArray(data) ? data : null);
+        if (!imported) { alert('Invalid backup file.'); return; }
+        var fromVersion = data.version || 1;
+        if (fromVersion < CURRENT_VERSION) {
+          runMigrations(imported, fromVersion);
+        }
+        if (!confirm('Replace all current tasks with ' + imported.length + ' tasks from backup?')) return;
+        tasks = imported;
+        saveTasks();
+        render();
+      } catch (err) {
+        alert('Could not read backup file: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   });
 
   // --- Midnight Checker ---
