@@ -128,6 +128,31 @@ header .date {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Inline actionable task in collapsed header */
+.inline-task {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;
+  justify-content: flex-end;
+}
+.inline-task-check {
+  appearance: none; -webkit-appearance: none;
+  width: 18px; height: 18px; border: 2px solid var(--cat-color);
+  border-radius: 50%; flex-shrink: 0; cursor: pointer; position: relative;
+  transition: background 0.2s; background: transparent;
+}
+.inline-task-check:checked {
+  background: var(--cat-color);
+}
+.inline-task-check:checked::after {
+  content: "\2713"; position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%); color: #fff; font-size: 10px; font-weight: bold;
+}
+.inline-task-title {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 0.85rem; color: var(--text);
+}
+.inline-project-label {
+  color: var(--text-muted); font-size: 0.8rem; white-space: nowrap; flex-shrink: 0;
+}
 .expand-arrow {
   flex-shrink: 0;
   font-size: 0.7rem;
@@ -1095,20 +1120,37 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       name.className = 'category-name';
       name.textContent = cat.name;
 
-      const preview = document.createElement('span');
-      preview.className = 'next-preview';
+      var preview;
       if (nextTask) {
         var previewTask = getNextAction(nextTask);
+        preview = document.createElement('span');
+        preview.className = 'inline-task';
+
         var dot = document.createElement('span');
-        dot.className = 'preview-dot';
-        dot.style.background = URGENCY_COLORS[previewTask.urgency] || URGENCY_COLORS.medium;
+        dot.className = 'urgency-dot ' + (previewTask.urgency || 'medium');
         preview.appendChild(dot);
-        var previewText = previewTask.title;
+
+        var inlineCheck = document.createElement('input');
+        inlineCheck.type = 'checkbox';
+        inlineCheck.className = 'inline-task-check';
+        inlineCheck.dataset.id = previewTask.id;
+        inlineCheck.setAttribute('aria-label', 'Complete ' + previewTask.title);
+        preview.appendChild(inlineCheck);
+
         if (nextTask.isProject && previewTask.id !== nextTask.id) {
-          previewText = nextTask.title + ': ' + previewTask.title;
+          var projLabel = document.createElement('span');
+          projLabel.className = 'inline-project-label';
+          projLabel.textContent = nextTask.title + ':';
+          preview.appendChild(projLabel);
         }
-        preview.appendChild(document.createTextNode(previewText));
-      } else if (!expandedCategories.has(cat.id)) {
+
+        var inlineTitle = document.createElement('span');
+        inlineTitle.className = 'inline-task-title';
+        inlineTitle.textContent = previewTask.title;
+        preview.appendChild(inlineTitle);
+      } else {
+        preview = document.createElement('span');
+        preview.className = 'next-preview';
         preview.textContent = 'No tasks';
       }
 
@@ -1853,6 +1895,18 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 
   // --- Event Delegation ---
   document.getElementById('app').addEventListener('click', function(e) {
+    // Inline task check in collapsed header — must come before header expand/collapse
+    var inlineCheck = e.target.closest('.inline-task-check');
+    if (inlineCheck) {
+      e.stopPropagation();
+      var taskId = inlineCheck.dataset.id;
+      if (taskId) {
+        completeTask(taskId);
+        render();
+      }
+      return;
+    }
+
     // Expand/collapse
     const header = e.target.closest('.category-header');
     if (header) {
