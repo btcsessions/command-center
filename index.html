@@ -3376,39 +3376,33 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       var dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
       var dateStr = now.toISOString().split('T')[0];
       var dayName = dayNames[now.getDay()];
-      var systemPrompt = 'You are a project planning assistant for a task management app called Command Center. '
-        + 'You can ADD new tasks/projects, UPDATE existing ones, DELETE tasks, and add SUBTASKS to existing projects.\n\n'
-        + 'TODAY: ' + dateStr + ' (' + dayName + '). '
-        + 'When the user says a day of the week (e.g. "Monday", "Tuesday", "next Friday"), resolve it to the next upcoming occurrence as a YYYY-MM-DD date. '
-        + '"Tomorrow", "next week", "in 3 days", etc. should also be resolved to exact dates.\n\n'
-        + 'Available categories: ' + categories.map(function(c) { return c.id + ' (' + c.name + ')'; }).join(', ') + '.\n\n'
+      var systemPrompt = 'You are a project planning assistant for Command Center. You talk like a real person — brief, direct, no fluff.\n\n'
+        + 'TODAY: ' + dateStr + ' (' + dayName + '). Resolve "Monday", "next Friday", "tomorrow" etc. to YYYY-MM-DD.\n\n'
+        + 'Categories: ' + categories.map(function(c) { return c.id + ' (' + c.name + ')'; }).join(', ') + '.\n\n'
         + '=== CURRENT TASKS ===\n' + tasksSummary + '\n=== END TASKS ===\n\n'
-        + 'CRITICAL: To make ANY changes to tasks, you MUST include a ```actions JSON block. Without it, nothing happens. '
-        + 'Do NOT just describe changes — always output the JSON block.\n\n'
-        + 'Format:\n'
+        + 'PERSONALITY & STYLE:\n'
+        + '- Keep responses SHORT. 1-2 sentences max for conversational replies. No bullet lists unless asked.\n'
+        + '- Sound natural, like a conversation. Not robotic or corporate.\n'
+        + '- Never over-explain. Don\'t narrate what you\'re doing ("I\'ll create a project..." — just do it).\n'
+        + '- When the user is clearly done describing something, just confirm briefly and include the actions.\n\n'
+        + 'BEFORE FINALIZING — ASK FIRST:\n'
+        + '- If urgency wasn\'t mentioned, ask: "How urgent is this?"\n'
+        + '- If there\'s no due date and it seems time-sensitive, ask: "When do you need this done?"\n'
+        + '- If the project is vague or could be broken down multiple ways, ask a clarifying question.\n'
+        + '- If you have everything you need, go ahead and create it — don\'t ask unnecessarily.\n'
+        + '- Keep clarifying questions to ONE question at a time. Don\'t stack multiple questions.\n\n'
+        + 'ACTIONS FORMAT — include ```actions block to make changes:\n'
         + '```actions\n'
-        + '[\n'
-        + '  {"action":"add", "title":"New project name", "category":"personal", "urgency":"medium", "isProject":true, "subtasks":[{"title":"Step 1"},{"title":"Step 2"}]},\n'
-        + '  {"action":"add", "addToProject":"Existing Project Name", "subtasks":[{"title":"New subtask 1"},{"title":"New subtask 2"}]},\n'
-        + '  {"action":"update", "id":"task-id-or-title", "due":"2025-06-01", "notes":"added info"},\n'
-        + '  {"action":"delete", "id":"task-id-or-title"}\n'
-        + ']\n'
+        + '[{"action":"add","title":"Project","category":"cat","urgency":"medium","isProject":true,"subtasks":[{"title":"Step 1"}]},\n'
+        + '{"action":"add","addToProject":"Existing Project","subtasks":[{"title":"New step"}]},\n'
+        + '{"action":"update","id":"task-id-or-title","due":"2025-06-01"},\n'
+        + '{"action":"delete","id":"task-id-or-title"}]\n'
         + '```\n\n'
-        + 'Action types:\n'
-        + '- "add" with "isProject":true + "subtasks": Creates a NEW project with subtasks.\n'
-        + '- "add" with "addToProject": Adds subtasks to an EXISTING project. Match by project title (partial match OK) or id. Put new subtasks in the "subtasks" array.\n'
-        + '- "add" without addToProject or isProject: Creates a simple standalone task.\n'
-        + '- "update": Modifies existing task fields. Use "id" to target (task id or title). Only include fields to change.\n'
-        + '- "delete": Removes task by "id" (task id or title). Deleting a project removes its subtasks too.\n\n'
-        + 'Rules:\n'
-        + '- ALWAYS output the ```actions block when making any changes — this is what actually modifies the tasks\n'
-        + '- Any task with 2+ steps MUST be a project with subtasks\n'
-        + '- Subtasks should be specific and actionable\n'
-        + '- Set urgency to low, medium, high, or critical\n'
-        + '- Pick the best matching category\n'
-        + '- When user asks to add subtasks to an existing project, use "addToProject" with the project name\n'
-        + '- Keep conversational responses concise\n'
-        + '- Always suggest actions JSON when you have enough info';
+        + 'RULES:\n'
+        + '- MUST include ```actions block for any changes — without it nothing happens\n'
+        + '- 2+ steps = project with subtasks. Use addToProject for existing projects.\n'
+        + '- Urgency: low/medium/high/critical. Pick best category.\n'
+        + '- Subtasks must be specific and actionable, not vague.';
 
       var apiMessages = chatMessages
         .filter(function(m) { return m.role === 'user' || m.role === 'assistant'; })
@@ -3479,11 +3473,17 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       if (parsedTasks && parsedTasks.length > 0) {
         executeActions(parsedTasks);
       }
-      if (lastInputWasVoice) speakText(cleanReply);
+      if (lastInputWasVoice && ttsEnabled) {
+        speakText(cleanReply);
+      } else {
+        // No TTS — reset for next voice turn immediately
+        onSpeechDone();
+      }
 
     } catch (e) {
       hideTyping();
       addChatMessage('assistant', 'Error: ' + e.message);
+      awaitingResponse = false;
     } finally {
       document.getElementById('chat-send').disabled = false;
     }
@@ -3512,6 +3512,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   var recognition = null;
   var isRecording = false;
   var lastInputWasVoice = false;
+  var voiceConversationMode = false; // stays in voice mode across turns
 
   if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -3523,9 +3524,15 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     var finalTranscript = '';
     var interimTranscript = '';
     var silenceTimer = null;
-    var SILENCE_DELAY = 2500; // 2.5 seconds of silence before auto-send
+    var SILENCE_DELAY = 2500;
+    var awaitingResponse = false; // true while waiting for Claude to reply
 
     recognition.onresult = function(e) {
+      // If TTS is speaking and user starts talking, interrupt it
+      if ('speechSynthesis' in window && speechSynthesis.speaking) {
+        speechSynthesis.cancel();
+      }
+
       interimTranscript = '';
       for (var i = e.resultIndex; i < e.results.length; i++) {
         if (e.results[i].isFinal) {
@@ -3539,26 +3546,31 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       input.style.height = 'auto';
       input.style.height = Math.min(input.scrollHeight, 120) + 'px';
 
-      // Reset silence timer — wait for a pause before auto-sending
+      // Reset silence timer
       if (silenceTimer) clearTimeout(silenceTimer);
-      silenceTimer = setTimeout(function() {
-        if (isRecording) {
-          isRecording = false;
-          recognition.stop();
-          document.getElementById('chat-mic').classList.remove('recording');
-          var inp = document.getElementById('chat-input');
-          if (inp.value.trim()) {
-            lastInputWasVoice = true;
-            sendChatMessage();
+      if (!awaitingResponse) {
+        silenceTimer = setTimeout(function() {
+          if (isRecording) {
+            var inp = document.getElementById('chat-input');
+            if (inp.value.trim()) {
+              lastInputWasVoice = true;
+              awaitingResponse = true;
+              finalTranscript = '';
+              interimTranscript = '';
+              sendChatMessage();
+              // Don't stop recognition — keep listening for interrupts/next turn
+            }
           }
-        }
-      }, SILENCE_DELAY);
+        }, SILENCE_DELAY);
+      }
     };
 
     recognition.onend = function() {
       if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
-      if (isRecording) {
-        // Browser stopped recognition unexpectedly (e.g. long silence) — auto-send
+      if (voiceConversationMode && isRecording) {
+        // Browser killed recognition (timeout etc.) — restart it
+        try { recognition.start(); } catch(e) { /* already running */ }
+      } else if (isRecording) {
         isRecording = false;
         document.getElementById('chat-mic').classList.remove('recording');
         var input = document.getElementById('chat-input');
@@ -3570,40 +3582,59 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     };
 
     recognition.onerror = function(e) {
-      isRecording = false;
-      document.getElementById('chat-mic').classList.remove('recording');
-      if (e.error !== 'no-speech' && e.error !== 'aborted') {
-        addChatMessage('system', 'Mic error: ' + e.error);
+      if (e.error === 'no-speech' || e.error === 'aborted') {
+        // In conversation mode, just restart
+        if (voiceConversationMode && isRecording) {
+          try { recognition.start(); } catch(ex) {}
+        }
+        return;
       }
+      isRecording = false;
+      voiceConversationMode = false;
+      document.getElementById('chat-mic').classList.remove('recording');
+      addChatMessage('system', 'Mic error: ' + e.error);
     };
   }
 
+  // Called after TTS finishes speaking — reset for next voice turn
+  function onSpeechDone() {
+    awaitingResponse = false;
+    finalTranscript = '';
+    interimTranscript = '';
+    document.getElementById('chat-input').value = '';
+    // Recognition should still be running in conversation mode
+  }
+
   document.getElementById('chat-mic').addEventListener('click', function() {
-    // If TTS is speaking, stop it first
-    if ('speechSynthesis' in window && speechSynthesis.speaking) {
-      speechSynthesis.cancel();
-      return;
-    }
     if (!recognition) {
       addChatMessage('system', 'Speech recognition is not supported in this browser. Try Chrome.');
       return;
     }
     if (isRecording) {
+      // Exit voice conversation mode
       isRecording = false;
+      voiceConversationMode = false;
+      awaitingResponse = false;
       if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+      if ('speechSynthesis' in window && speechSynthesis.speaking) {
+        speechSynthesis.cancel();
+      }
       recognition.stop();
       this.classList.remove('recording');
-      // Send what we have on manual stop
+      // Send any pending text
       var inp = document.getElementById('chat-input');
       if (inp.value.trim()) {
         lastInputWasVoice = true;
         sendChatMessage();
       }
     } else {
+      // Enter voice conversation mode
       finalTranscript = '';
       interimTranscript = '';
+      awaitingResponse = false;
       document.getElementById('chat-input').value = '';
       isRecording = true;
+      voiceConversationMode = true;
       this.classList.add('recording');
       recognition.start();
     }
@@ -3626,21 +3657,43 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     if (!ttsEnabled) speechSynthesis.cancel();
   });
 
+  function pickVoice() {
+    var voices = speechSynthesis.getVoices();
+    var en = voices.filter(function(v) { return v.lang.startsWith('en'); });
+    // Prefer deep/male-sounding voices — look for keywords
+    var maleKeywords = ['male', 'daniel', 'james', 'david', 'mark', 'paul', 'aaron', 'fred', 'guy', 'lee', 'reed', 'tom', 'rishi', 'ralph', 'english.*us'];
+    var pick = null;
+    for (var k = 0; k < maleKeywords.length; k++) {
+      var re = new RegExp(maleKeywords[k], 'i');
+      pick = en.find(function(v) { return re.test(v.name); });
+      if (pick) break;
+    }
+    // Fallback: any English voice, preferring non-"female"/"woman" named ones
+    if (!pick) {
+      pick = en.find(function(v) { return !/female|woman|samantha|victoria|karen|fiona|moira|tessa/i.test(v.name); });
+    }
+    return pick || en[0] || voices[0] || null;
+  }
+
   function speakText(text) {
     if (!ttsEnabled || !('speechSynthesis' in window)) return;
-    // Strip task JSON artifacts and keep conversational text
     var clean = text.replace(/```[\s\S]*?```/g, '').replace(/\[.*?\]/g, '').trim();
     if (!clean) return;
     speechSynthesis.cancel();
     var utterance = new SpeechSynthesisUtterance(clean);
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    // Try to pick a good voice
-    var voices = speechSynthesis.getVoices();
-    var preferred = voices.find(function(v) { return v.lang.startsWith('en') && v.name.includes('Google'); })
-      || voices.find(function(v) { return v.lang.startsWith('en'); });
-    if (preferred) utterance.voice = preferred;
+    // Deep, warm, unhurried Texas baritone
+    utterance.rate = 0.85;
+    utterance.pitch = 0.8;
+    var voice = pickVoice();
+    if (voice) utterance.voice = voice;
+    // When done speaking, signal ready for next voice turn
+    utterance.onend = function() { onSpeechDone(); };
     speechSynthesis.speak(utterance);
+  }
+
+  // Voices load async on some browsers
+  if ('speechSynthesis' in window) {
+    speechSynthesis.onvoiceschanged = function() { pickVoice(); };
   }
 
   // --- Gist Sync ---
