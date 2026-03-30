@@ -2894,14 +2894,22 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       return;
     }
 
-    // Task expand/collapse (catch-all for clicks on task-item not handled above)
+    // Task/Project expand/collapse (catch-all for clicks on task-item not handled above)
     var taskItem = e.target.closest('.task-item');
     if (taskItem) {
       var taskWrapper = taskItem.closest('.task-wrapper');
       if (taskWrapper) {
         var tid = taskWrapper.dataset.id;
         var t = tasks.find(function(x) { return x.id === tid; });
-        if (t && !t.isProject) {
+        if (t && t.isProject) {
+          if (expandedProjects.has(tid)) {
+            expandedProjects.delete(tid);
+          } else {
+            expandedProjects.add(tid);
+          }
+          render();
+          return;
+        } else if (t) {
           if (expandedTasks.has(tid)) {
             expandedTasks.delete(tid);
           } else {
