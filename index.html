@@ -107,6 +107,14 @@ header .date {
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 .backup-btn:hover { background: var(--surface-hover); color: var(--text); border-color: var(--work); }
+.backup-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.sync-status {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  align-self: center;
+  min-width: 20px;
+  text-align: center;
+}
 
 #app {
   padding: 8px;
@@ -733,9 +741,10 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   <h1>Command Center</h1>
   <div class="date" id="today-date"></div>
   <div class="backup-bar">
-    <button class="backup-btn" id="btn-export" title="Export Backup">&#x2B07;</button>
-    <button class="backup-btn" id="btn-import" title="Import Backup">&#x2B06;</button>
-    <input type="file" id="import-file" accept=".json" class="hidden">
+    <button class="backup-btn" id="btn-pull" title="Pull from Gist">&#x21A7;</button>
+    <span class="sync-status" id="sync-status"></span>
+    <button class="backup-btn" id="btn-push" title="Push to Gist">&#x21A5;</button>
+    <button class="backup-btn" id="btn-settings" title="Sync Settings">&#x2699;</button>
   </div>
 </header>
 
@@ -834,6 +843,28 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         <button type="submit" class="btn btn-primary" id="cat-btn-save">Save</button>
       </div>
     </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="settings-modal-overlay">
+  <div class="modal-content">
+    <h2 class="modal-title">Sync Settings</h2>
+    <div class="form-group">
+      <label for="settings-token">GitHub Personal Access Token</label>
+      <input type="password" id="settings-token" class="form-input" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off">
+      <p style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">
+        Create at GitHub &rarr; Settings &rarr; Developer settings &rarr; Personal access tokens &rarr; Tokens (classic). Only the <strong>gist</strong> scope is needed.
+      </p>
+    </div>
+    <div class="form-group" id="settings-gist-info" style="display:none;">
+      <label>Linked Gist</label>
+      <p style="font-size:0.85rem;color:var(--text-muted);" id="settings-gist-id-display"></p>
+      <button type="button" class="btn btn-secondary" id="settings-unlink" style="margin-top:6px;font-size:0.8rem;">Unlink Gist</button>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-secondary" id="settings-cancel">Cancel</button>
+      <button type="button" class="btn btn-primary" id="settings-save">Save</button>
+    </div>
   </div>
 </div>
 
@@ -2568,56 +2599,166 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     if (e.target === this) closeCatModal();
   });
 
-  // --- Export / Import ---
-  document.getElementById('btn-export').addEventListener('click', function() {
-    var data = {
+  // --- Gist Sync ---
+  var GIST_TOKEN_KEY = 'commandcenter_gh_token';
+  var GIST_ID_KEY = 'commandcenter_gist_id';
+  var GIST_FILENAME = 'command-center-data.json';
+
+  function getToken() { return localStorage.getItem(GIST_TOKEN_KEY) || ''; }
+  function getGistId() { return localStorage.getItem(GIST_ID_KEY) || ''; }
+  function setToken(t) { localStorage.setItem(GIST_TOKEN_KEY, t); }
+  function setGistId(id) { localStorage.setItem(GIST_ID_KEY, id); }
+  function clearGistId() { localStorage.removeItem(GIST_ID_KEY); }
+
+  function setSyncStatus(text, temp) {
+    var el = document.getElementById('sync-status');
+    el.textContent = text;
+    if (temp) setTimeout(function() { el.textContent = ''; }, 3000);
+  }
+
+  function buildSyncData() {
+    return JSON.stringify({
       version: CURRENT_VERSION,
-      exportedAt: new Date().toISOString(),
+      syncedAt: new Date().toISOString(),
       tasks: tasks,
       categories: categories
-    };
-    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = 'nextaction-backup-' + getTodayStr() + '.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  });
+    }, null, 2);
+  }
 
-  document.getElementById('btn-import').addEventListener('click', function() {
-    document.getElementById('import-file').click();
-  });
+  function applySyncData(data) {
+    var imported = Array.isArray(data.tasks) ? data.tasks : null;
+    if (!imported) throw new Error('Invalid sync data');
+    var fromVersion = data.version || 1;
+    if (fromVersion < CURRENT_VERSION) {
+      runMigrations(imported, fromVersion);
+    }
+    tasks = imported;
+    saveTasks();
+    if (Array.isArray(data.categories) && data.categories.length > 0) {
+      categories = data.categories;
+      saveCategories();
+    }
+    render();
+  }
 
-  document.getElementById('import-file').addEventListener('change', function(e) {
-    var file = e.target.files[0];
-    if (!file) return;
-    var reader = new FileReader();
-    reader.onload = function(ev) {
-      try {
-        var data = JSON.parse(ev.target.result);
-        var imported = Array.isArray(data.tasks) ? data.tasks : (Array.isArray(data) ? data : null);
-        if (!imported) { alert('Invalid backup file.'); return; }
-        var fromVersion = data.version || 1;
-        if (fromVersion < CURRENT_VERSION) {
-          runMigrations(imported, fromVersion);
-        }
-        if (!confirm('Replace all current tasks with ' + imported.length + ' tasks from backup?')) return;
-        tasks = imported;
-        saveTasks();
-        if (Array.isArray(data.categories) && data.categories.length > 0) {
-          categories = data.categories;
-          saveCategories();
-        }
-        render();
-      } catch (err) {
-        alert('Could not read backup file: ' + err.message);
+  async function gistPush() {
+    var token = getToken();
+    if (!token) { alert('Set your GitHub token in Sync Settings first.'); return; }
+    var btnPush = document.getElementById('btn-push');
+    btnPush.disabled = true;
+    setSyncStatus('\u2026');
+    try {
+      var gistId = getGistId();
+      var body = { description: 'Command Center Sync', public: false, files: {} };
+      body.files[GIST_FILENAME] = { content: buildSyncData() };
+
+      var url, method;
+      if (gistId) {
+        url = 'https://api.github.com/gists/' + gistId;
+        method = 'PATCH';
+      } else {
+        url = 'https://api.github.com/gists';
+        method = 'POST';
       }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
+
+      var resp = await fetch(url, {
+        method: method,
+        headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      if (!resp.ok) {
+        var err = await resp.json().catch(function() { return {}; });
+        throw new Error(err.message || ('HTTP ' + resp.status));
+      }
+
+      var result = await resp.json();
+      if (!gistId) setGistId(result.id);
+      setSyncStatus('\u2713', true);
+    } catch (e) {
+      setSyncStatus('\u2717', true);
+      alert('Push failed: ' + e.message);
+    } finally {
+      btnPush.disabled = false;
+    }
+  }
+
+  async function gistPull() {
+    var token = getToken();
+    var gistId = getGistId();
+    if (!token) { alert('Set your GitHub token in Sync Settings first.'); return; }
+    if (!gistId) { alert('No linked Gist yet. Push first to create one.'); return; }
+    var btnPull = document.getElementById('btn-pull');
+    btnPull.disabled = true;
+    setSyncStatus('\u2026');
+    try {
+      var resp = await fetch('https://api.github.com/gists/' + gistId, {
+        headers: { 'Authorization': 'token ' + token }
+      });
+
+      if (!resp.ok) {
+        var err = await resp.json().catch(function() { return {}; });
+        throw new Error(err.message || ('HTTP ' + resp.status));
+      }
+
+      var result = await resp.json();
+      var file = result.files[GIST_FILENAME];
+      if (!file) throw new Error('Sync file not found in Gist');
+
+      var data = JSON.parse(file.content);
+      applySyncData(data);
+      setSyncStatus('\u2713', true);
+    } catch (e) {
+      setSyncStatus('\u2717', true);
+      alert('Pull failed: ' + e.message);
+    } finally {
+      btnPull.disabled = false;
+    }
+  }
+
+  document.getElementById('btn-push').addEventListener('click', gistPush);
+  document.getElementById('btn-pull').addEventListener('click', gistPull);
+
+  // --- Settings Modal ---
+  document.getElementById('btn-settings').addEventListener('click', function() {
+    var overlay = document.getElementById('settings-modal-overlay');
+    document.getElementById('settings-token').value = getToken();
+    var gistId = getGistId();
+    var gistInfo = document.getElementById('settings-gist-info');
+    if (gistId) {
+      gistInfo.style.display = '';
+      document.getElementById('settings-gist-id-display').textContent = 'ID: ' + gistId;
+    } else {
+      gistInfo.style.display = 'none';
+    }
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  });
+
+  document.getElementById('settings-cancel').addEventListener('click', function() {
+    document.getElementById('settings-modal-overlay').classList.remove('open');
+    document.body.style.overflow = '';
+  });
+
+  document.getElementById('settings-save').addEventListener('click', function() {
+    var token = document.getElementById('settings-token').value.trim();
+    setToken(token);
+    document.getElementById('settings-modal-overlay').classList.remove('open');
+    document.body.style.overflow = '';
+  });
+
+  document.getElementById('settings-unlink').addEventListener('click', function() {
+    if (confirm('Unlink this Gist? Next push will create a new one.')) {
+      clearGistId();
+      document.getElementById('settings-gist-info').style.display = 'none';
+    }
+  });
+
+  document.getElementById('settings-modal-overlay').addEventListener('click', function(e) {
+    if (e.target === this) {
+      this.classList.remove('open');
+      document.body.style.overflow = '';
+    }
   });
 
   // --- Midnight Checker ---
