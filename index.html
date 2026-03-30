@@ -3022,7 +3022,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       var line = (t.isProject ? '[PROJECT] ' : '[TASK] ')
         + '"' + t.title + '" (id:' + t.id + ', category:' + t.category
         + ', urgency:' + (t.urgency || 'medium')
-        + (t.due ? ', due:' + t.due : '')
+        + (t.dueDate ? ', due:' + t.dueDate : '')
         + (t.notes ? ', notes:"' + t.notes.substring(0, 60) + '"' : '') + ')';
       summary.push(line);
       if (t.isProject && t.subtaskOrder && t.subtaskOrder.length > 0) {
@@ -3030,7 +3030,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
           var st = tasks.find(function(x) { return x.id === sid; });
           if (st) {
             summary.push('  └ "' + st.title + '" (id:' + st.id
-              + (st.due ? ', due:' + st.due : '')
+              + (st.dueDate ? ', due:' + st.dueDate : '')
               + (st.notes ? ', notes:"' + st.notes.substring(0, 40) + '"' : '') + ')');
           }
         });
@@ -3041,6 +3041,12 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 
   function executeActions(actions) {
     var counts = { added: 0, updated: 0, deleted: 0 };
+
+    function makeId() {
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+      return Date.now().toString(36) + Math.random().toString(36).slice(2);
+    }
+
     actions.forEach(function(a) {
       var action = a.action || 'add';
 
@@ -3054,18 +3060,21 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         }
         if (parentTask) {
           // Adding subtasks to existing project
-          var subs = a.subtasks || [{ title: a.title, urgency: a.urgency, due: a.due, notes: a.notes }];
+          var subs = a.subtasks || [{ title: a.title, urgency: a.urgency, due: a.due || a.dueDate, notes: a.notes }];
           subs.forEach(function(st) {
             var sub = {
-              id: generateId(),
+              id: makeId(),
               title: st.title || st,
               category: parentTask.category,
               urgency: st.urgency || parentTask.urgency || 'medium',
-              due: st.due || null,
-              notes: st.notes || null,
+              recurring: 'one-time',
+              completions: [],
+              dueDate: st.due || st.dueDate || null,
+              notes: st.notes || '',
               isProject: false,
               parentId: parentTask.id,
               subtaskOrder: [],
+              sortOrder: 0,
               createdAt: new Date().toISOString()
             };
             tasks.push(sub);
@@ -3074,16 +3083,20 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
           });
         } else {
           // New top-level task or project
+          var cat = a.category || (categories.length > 0 ? categories[0].id : 'work');
           var task = {
-            id: generateId(),
+            id: makeId(),
             title: a.title,
-            category: a.category || (categories.length > 0 ? categories[0].id : 'work'),
+            category: cat,
             urgency: a.urgency || 'medium',
-            due: a.due || null,
-            notes: a.notes || null,
+            recurring: 'one-time',
+            completions: [],
+            dueDate: a.due || a.dueDate || null,
+            notes: a.notes || '',
             isProject: a.isProject || false,
             parentId: null,
             subtaskOrder: [],
+            sortOrder: nextSortOrder(cat),
             createdAt: new Date().toISOString()
           };
           tasks.push(task);
@@ -3092,15 +3105,18 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
             task.isProject = true;
             a.subtasks.forEach(function(st) {
               var sub = {
-                id: generateId(),
+                id: makeId(),
                 title: st.title || st,
                 category: task.category,
                 urgency: st.urgency || task.urgency,
-                due: st.due || null,
-                notes: st.notes || null,
+                recurring: 'one-time',
+                completions: [],
+                dueDate: st.due || st.dueDate || null,
+                notes: st.notes || '',
                 isProject: false,
                 parentId: task.id,
                 subtaskOrder: [],
+                sortOrder: 0,
                 createdAt: new Date().toISOString()
               };
               tasks.push(sub);
@@ -3116,7 +3132,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         if (target) {
           if (a.title !== undefined) target.title = a.title;
           if (a.urgency !== undefined) target.urgency = a.urgency;
-          if (a.due !== undefined) target.due = a.due;
+          if (a.due !== undefined || a.dueDate !== undefined) target.dueDate = a.due || a.dueDate;
           if (a.category !== undefined) target.category = a.category;
           if (a.notes !== undefined) target.notes = a.notes;
           counts.updated++;
