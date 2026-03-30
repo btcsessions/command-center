@@ -42,6 +42,24 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Pull to refresh */
+.pull-refresh {
+  text-align: center;
+  height: 0;
+  overflow: hidden;
+  transition: height 0.2s ease;
+}
+.pull-refresh-spinner {
+  display: inline-block;
+  font-size: 1.5rem;
+  color: var(--text-muted);
+  padding: 8px;
+}
+.pull-refresh.refreshing .pull-refresh-spinner {
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 header {
   text-align: center;
   padding: 24px 16px 8px;
@@ -706,6 +724,10 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 </style>
 </head>
 <body>
+
+<div id="pull-refresh" class="pull-refresh">
+  <span class="pull-refresh-spinner">&#x21bb;</span>
+</div>
 
 <header>
   <h1>Command Center</h1>
@@ -2621,6 +2643,48 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   } else {
     init();
   }
+})();
+
+// --- Pull to refresh (for standalone PWA) ---
+(function() {
+  var indicator = document.getElementById('pull-refresh');
+  var startY = 0;
+  var pulling = false;
+  var TRIGGER = 80;
+
+  document.addEventListener('touchstart', function(e) {
+    // Only activate when scrolled to top and not swiping horizontally
+    if (window.scrollY === 0 && !e.target.closest('#app')) {
+      startY = e.touches[0].clientY;
+      pulling = true;
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchmove', function(e) {
+    if (!pulling) return;
+    var dy = e.touches[0].clientY - startY;
+    if (dy > 0) {
+      indicator.style.height = Math.min(dy * 0.5, 60) + 'px';
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchend', function(e) {
+    if (!pulling) return;
+    pulling = false;
+    var dy = e.changedTouches[0].clientY - startY;
+    if (dy > TRIGGER) {
+      indicator.style.height = '40px';
+      indicator.classList.add('refreshing');
+      location.reload();
+    } else {
+      indicator.style.height = '0';
+    }
+  });
+
+  document.addEventListener('touchcancel', function() {
+    pulling = false;
+    indicator.style.height = '0';
+  });
 })();
 
 // --- Mobile swipe: one card per swipe ---
