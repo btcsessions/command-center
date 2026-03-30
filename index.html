@@ -1116,7 +1116,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 </div>
 
 <!-- Chat Panel -->
-<button class="chat-fab" id="chat-fab" title="Plan with AI">&#x25B2;</button>
+<button class="chat-fab" id="chat-fab" title="Plan with AI">💬</button>
 <div class="chat-panel" id="chat-panel">
   <div class="chat-header">
     <span class="chat-header-title">🤖 Project Planner</span>
@@ -2878,7 +2878,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     var fab = document.getElementById('chat-fab');
     var isOpen = panel.classList.toggle('open');
     fab.classList.toggle('open', isOpen);
-    fab.textContent = isOpen ? '\u2715' : '\u25B2';
+    fab.textContent = isOpen ? '\u2715' : '\uD83D\uDCAC';
     if (isOpen) {
       setTimeout(function() { document.getElementById('chat-input').focus(); }, 300);
     }
