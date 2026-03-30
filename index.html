@@ -3209,6 +3209,24 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       return Date.now().toString(36) + Math.random().toString(36).slice(2);
     }
 
+    // Resolve a category value to a valid category ID
+    function resolveCategory(val) {
+      if (!val) return categories.length > 0 ? categories[0].id : 'work';
+      // Exact ID match
+      var exact = categories.find(function(c) { return c.id === val; });
+      if (exact) return exact.id;
+      // Name match (case-insensitive)
+      var byName = categories.find(function(c) { return c.name.toLowerCase() === String(val).toLowerCase(); });
+      if (byName) return byName.id;
+      // Partial match
+      var partial = categories.find(function(c) {
+        return c.name.toLowerCase().includes(String(val).toLowerCase()) || String(val).toLowerCase().includes(c.name.toLowerCase());
+      });
+      if (partial) return partial.id;
+      // Default to first category
+      return categories.length > 0 ? categories[0].id : 'work';
+    }
+
     actions.forEach(function(a) {
       var action = a.action || 'add';
 
@@ -3263,7 +3281,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
           });
         } else {
           // New top-level task or project
-          var cat = a.category || (categories.length > 0 ? categories[0].id : 'work');
+          var cat = resolveCategory(a.category);
           var task = {
             id: makeId(),
             title: a.title,
@@ -3313,7 +3331,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
           if (a.title !== undefined) target.title = a.title;
           if (a.urgency !== undefined) target.urgency = a.urgency;
           if (a.due !== undefined || a.dueDate !== undefined) target.dueDate = a.due || a.dueDate;
-          if (a.category !== undefined) target.category = a.category;
+          if (a.category !== undefined) target.category = resolveCategory(a.category);
           if (a.notes !== undefined) target.notes = a.notes;
           counts.updated++;
         }
@@ -3379,7 +3397,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       var dayName = dayNames[now.getDay()];
       var systemPrompt = 'You are a project planning assistant for Command Center. You talk like a real person — brief, direct, no fluff.\n\n'
         + 'TODAY: ' + dateStr + ' (' + dayName + '). Resolve "Monday", "next Friday", "tomorrow" etc. to YYYY-MM-DD.\n\n'
-        + 'Categories: ' + categories.map(function(c) { return c.id + ' (' + c.name + ')'; }).join(', ') + '.\n\n'
+        + 'Categories (use the ID in actions, not the name): ' + categories.map(function(c) { return c.id + ' (' + c.name + ')'; }).join(', ') + '.\n\n'
         + '=== CURRENT TASKS ===\n' + tasksSummary + '\n=== END TASKS ===\n\n'
         + 'PERSONALITY & STYLE:\n'
         + '- Keep responses SHORT. 1-2 sentences max for conversational replies. No bullet lists unless asked.\n'
@@ -3454,7 +3472,6 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 
       if (actionMatch) {
         cleanReply = reply.replace(actionMatch[0], '').trim();
-        // Also strip leftover empty fences
         cleanReply = cleanReply.replace(/```(?:actions|tasks|json)?\s*```/g, '').trim();
         try {
           parsedTasks = JSON.parse(actionMatch[1]);
