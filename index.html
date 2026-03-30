@@ -3523,10 +3523,9 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     recognition.lang = 'en-US';
 
     var finalTranscript = '';
-    var interimTranscript = '';
     var silenceTimer = null;
     var SILENCE_DELAY = 2500;
-    var awaitingResponse = false; // true while waiting for Claude to reply
+    var awaitingResponse = false;
 
     recognition.onresult = function(e) {
       // If TTS is speaking and user starts talking, interrupt it
@@ -3534,32 +3533,34 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         speechSynthesis.cancel();
       }
 
-      interimTranscript = '';
-      for (var i = e.resultIndex; i < e.results.length; i++) {
+      // Rebuild transcript from ALL results to avoid duplication
+      var final = '';
+      var interim = '';
+      for (var i = 0; i < e.results.length; i++) {
         if (e.results[i].isFinal) {
-          finalTranscript += e.results[i][0].transcript;
+          final += e.results[i][0].transcript;
         } else {
-          interimTranscript += e.results[i][0].transcript;
+          interim += e.results[i][0].transcript;
         }
       }
+      finalTranscript = final;
       var input = document.getElementById('chat-input');
-      input.value = finalTranscript + interimTranscript;
+      input.value = (final + interim).trim();
       input.style.height = 'auto';
       input.style.height = Math.min(input.scrollHeight, 120) + 'px';
 
       // Reset silence timer
       if (silenceTimer) clearTimeout(silenceTimer);
-      if (!awaitingResponse) {
+      if (!awaitingResponse && input.value.trim()) {
         silenceTimer = setTimeout(function() {
           if (isRecording) {
             var inp = document.getElementById('chat-input');
             if (inp.value.trim()) {
               lastInputWasVoice = true;
               awaitingResponse = true;
-              finalTranscript = '';
-              interimTranscript = '';
               sendChatMessage();
-              // Don't stop recognition — keep listening for interrupts/next turn
+              // Reset for next turn but don't stop recognition
+              finalTranscript = '';
             }
           }
         }, SILENCE_DELAY);
@@ -3569,7 +3570,8 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     recognition.onend = function() {
       if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
       if (voiceConversationMode && isRecording) {
-        // Browser killed recognition (timeout etc.) — restart it
+        // Browser killed recognition (timeout etc.) — restart with clean slate
+        finalTranscript = '';
         try { recognition.start(); } catch(e) { /* already running */ }
       } else if (isRecording) {
         isRecording = false;
@@ -3579,6 +3581,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
           lastInputWasVoice = true;
           sendChatMessage();
         }
+        finalTranscript = '';
       }
     };
 
@@ -3601,7 +3604,6 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   function onSpeechDone() {
     awaitingResponse = false;
     finalTranscript = '';
-    interimTranscript = '';
     document.getElementById('chat-input').value = '';
     // Recognition should still be running in conversation mode
   }
@@ -3631,7 +3633,6 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     } else {
       // Enter voice conversation mode
       finalTranscript = '';
-      interimTranscript = '';
       awaitingResponse = false;
       document.getElementById('chat-input').value = '';
       isRecording = true;
