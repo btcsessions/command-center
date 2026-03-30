@@ -3519,7 +3519,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     recognition = new SpeechRecognition();
     recognition.continuous = false;
-    recognition.interimResults = true;
+    recognition.interimResults = false;
     recognition.lang = 'en-US';
 
     var currentUtterance = '';
@@ -3531,11 +3531,8 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         speechSynthesis.cancel();
       }
 
-      // With continuous=false, just grab the latest result
-      var transcript = '';
-      for (var i = 0; i < e.results.length; i++) {
-        transcript += e.results[i][0].transcript;
-      }
+      // Single result — just take it directly
+      var transcript = e.results[e.results.length - 1][0].transcript;
       currentUtterance = transcript;
       var input = document.getElementById('chat-input');
       input.value = transcript;
