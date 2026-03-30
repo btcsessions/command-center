@@ -1495,6 +1495,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       if (parent) parent.subtaskOrder.push(id);
     }
     saveTasks();
+    autoPush();
     return task;
   }
 
@@ -3185,6 +3186,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     if (counts.deleted) parts.push(counts.deleted + ' deleted');
     if (parts.length > 0) {
       addChatMessage('system', '\u2713 ' + parts.join(', '));
+      autoPush();
     } else {
       addChatMessage('system', '\u26A0 No changes applied. Actions received: ' + JSON.stringify(actions.map(function(a) { return { action: a.action, title: a.title, addToProject: a.addToProject, id: a.id }; })));
     }
@@ -3617,6 +3619,54 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   document.getElementById('btn-push').addEventListener('click', gistPush);
   document.getElementById('btn-pull').addEventListener('click', gistPull);
 
+  // Silent auto-sync helpers (no alerts, no button state changes)
+  async function autoPush() {
+    var token = getToken();
+    if (!token) return;
+    setSyncStatus('\u2026');
+    try {
+      var gistId = getGistId();
+      var body = { description: 'Command Center Sync', public: false, files: {} };
+      body.files[GIST_FILENAME] = { content: buildSyncData() };
+      var url = gistId ? ('https://api.github.com/gists/' + gistId) : 'https://api.github.com/gists';
+      var method = gistId ? 'PATCH' : 'POST';
+      var resp = await fetch(url, {
+        method: method,
+        headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      var result = await resp.json();
+      if (!gistId) setGistId(result.id);
+      setSyncStatus('\u2713', true);
+    } catch (e) {
+      setSyncStatus('\u2717', true);
+      console.warn('Auto-push failed:', e.message);
+    }
+  }
+
+  async function autoPull() {
+    var token = getToken();
+    var gistId = getGistId();
+    if (!token || !gistId) return;
+    setSyncStatus('\u2026');
+    try {
+      var resp = await fetch('https://api.github.com/gists/' + gistId, {
+        headers: { 'Authorization': 'token ' + token }
+      });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      var result = await resp.json();
+      var file = result.files[GIST_FILENAME];
+      if (!file) throw new Error('Sync file not found');
+      var data = JSON.parse(file.content);
+      applySyncData(data);
+      setSyncStatus('\u2713', true);
+    } catch (e) {
+      setSyncStatus('\u2717', true);
+      console.warn('Auto-pull failed:', e.message);
+    }
+  }
+
   // --- Settings Modal ---
   document.getElementById('btn-settings').addEventListener('click', function() {
     var overlay = document.getElementById('settings-modal-overlay');
@@ -3689,6 +3739,8 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     loadTasks();
     render();
     startMidnightChecker();
+    // Auto-pull from Gist on launch (silent, won't alert if not configured)
+    autoPull();
   }
 
   if (document.readyState === 'loading') {
