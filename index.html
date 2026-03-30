@@ -2691,21 +2691,20 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 (function() {
   var app = document.getElementById('app');
   var startX = 0;
-  var startScroll = 0;
+  var startIndex = 0;
   var swiping = false;
-  var THRESHOLD = 30; // min px to count as swipe
+  var THRESHOLD = 30;
 
   function getCardPositions() {
     var cards = app.querySelectorAll('.category, .add-category-card');
     var positions = [];
-    var appRect = app.getBoundingClientRect();
     cards.forEach(function(c) {
       positions.push(c.offsetLeft - app.offsetLeft);
     });
     return positions;
   }
 
-  function getCurrentIndex() {
+  function getClosestIndex() {
     var positions = getCardPositions();
     var scrollLeft = app.scrollLeft;
     var closest = 0;
@@ -2724,31 +2723,27 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   }
 
   app.addEventListener('touchstart', function(e) {
-    // Don't hijack if touching a drag handle
     if (e.target.closest('.drag-handle') || e.target.closest('.cat-drag-handle')) return;
     startX = e.touches[0].clientX;
-    startScroll = app.scrollLeft;
+    startIndex = getClosestIndex();
     swiping = true;
   }, { passive: true });
 
   app.addEventListener('touchmove', function(e) {
     if (!swiping) return;
-    // Prevent native scroll so we control it
-    var dx = e.touches[0].clientX - startX;
-    app.scrollLeft = startScroll - dx;
-  }, { passive: true });
+    e.preventDefault();
+  }, { passive: false });
 
   app.addEventListener('touchend', function(e) {
     if (!swiping) return;
     swiping = false;
     var dx = e.changedTouches[0].clientX - startX;
-    var current = getCurrentIndex();
     if (dx < -THRESHOLD) {
-      scrollToIndex(current + 1);
+      scrollToIndex(startIndex + 1);
     } else if (dx > THRESHOLD) {
-      scrollToIndex(current - 1);
+      scrollToIndex(startIndex - 1);
     } else {
-      scrollToIndex(current);
+      scrollToIndex(startIndex);
     }
   });
 
