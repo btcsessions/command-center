@@ -66,23 +66,27 @@ header {
   position: relative;
 }
 header h1 {
+  display: inline-block;
   font-family: 'Orbitron', sans-serif;
   font-size: 1.4rem;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  background: linear-gradient(135deg, #00ffcc 0%, #00d4aa 50%, #22c55e 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  filter: drop-shadow(0 0 6px rgba(57, 255, 20, 0.5)) drop-shadow(0 0 18px rgba(57, 255, 20, 0.3)) drop-shadow(0 0 40px rgba(57, 255, 20, 0.15));
+  color: #00d4aa;
+  background: rgba(10, 20, 16, 0.85);
+  border: 1px solid rgba(0, 212, 170, 0.4);
+  border-radius: 12px;
+  padding: 12px 24px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 0 6px rgba(57, 255, 20, 0.3), 0 0 18px rgba(57, 255, 20, 0.15), 0 0 40px rgba(57, 255, 20, 0.08);
 }
 header .date {
   font-family: 'Orbitron', sans-serif;
   font-size: 0.7rem;
   font-weight: 500;
   color: var(--text-muted);
-  margin-top: 4px;
+  margin-top: 10px;
   letter-spacing: 0.06em;
 }
 .backup-bar {
