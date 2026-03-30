@@ -3172,8 +3172,15 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 
     try {
       var tasksSummary = buildTasksSummary();
+      var now = new Date();
+      var dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+      var dateStr = now.toISOString().split('T')[0];
+      var dayName = dayNames[now.getDay()];
       var systemPrompt = 'You are a project planning assistant for a task management app called Command Center. '
         + 'You can ADD new tasks/projects, UPDATE existing ones, DELETE tasks, and add SUBTASKS to existing projects.\n\n'
+        + 'TODAY: ' + dateStr + ' (' + dayName + '). '
+        + 'When the user says a day of the week (e.g. "Monday", "Tuesday", "next Friday"), resolve it to the next upcoming occurrence as a YYYY-MM-DD date. '
+        + '"Tomorrow", "next week", "in 3 days", etc. should also be resolved to exact dates.\n\n'
         + 'Available categories: ' + categories.map(function(c) { return c.id + ' (' + c.name + ')'; }).join(', ') + '.\n\n'
         + '=== CURRENT TASKS ===\n' + tasksSummary + '\n=== END TASKS ===\n\n'
         + 'When you have actions ready, include a JSON block in this EXACT format:\n'
