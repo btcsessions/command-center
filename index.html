@@ -753,6 +753,29 @@ header .date {
 }
 .chat-input:focus { border-color: #00d4aa; }
 .chat-input::placeholder { color: var(--text-muted); }
+.chat-mic {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  width: 42px;
+  flex-shrink: 0;
+  cursor: pointer;
+  font-size: 1.1rem;
+  transition: background 0.15s, border-color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.chat-mic:hover { background: var(--surface-hover); }
+.chat-mic.recording {
+  background: rgba(244, 63, 94, 0.15);
+  border-color: var(--danger);
+  animation: pulse-mic 1.2s ease infinite;
+}
+@keyframes pulse-mic {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.3); }
+  50% { box-shadow: 0 0 0 6px rgba(244, 63, 94, 0); }
+}
 .chat-send {
   background: #00d4aa;
   color: #0a1410;
@@ -767,6 +790,7 @@ header .date {
 }
 .chat-send:disabled { opacity: 0.4; cursor: not-allowed; }
 .chat-send:hover:not(:disabled) { opacity: 0.85; }
+.chat-tts-off { opacity: 0.4; }
 
 .chat-actions {
   display: flex;
@@ -1095,12 +1119,16 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 <div class="chat-panel" id="chat-panel">
   <div class="chat-header">
     <span class="chat-header-title">🤖 Project Planner</span>
-    <button class="chat-close" id="chat-close">&times;</button>
+    <div style="display:flex;gap:4px;">
+      <button class="chat-close" id="chat-tts-toggle" title="Toggle voice replies">🔊</button>
+      <button class="chat-close" id="chat-close">&times;</button>
+    </div>
   </div>
   <div class="chat-messages" id="chat-messages">
-    <div class="chat-msg system">Describe a project and I'll help you break it into tasks. Tap the mic on your keyboard to dictate.</div>
+    <div class="chat-msg system">Describe a project and I'll help you break it into tasks. Tap the mic to talk.</div>
   </div>
   <div class="chat-input-bar">
+    <button class="chat-mic" id="chat-mic" title="Voice input">🎙️</button>
     <textarea class="chat-input" id="chat-input" placeholder="Describe a project..." rows="1"></textarea>
     <button class="chat-send" id="chat-send">&#x27A4;</button>
   </div>
@@ -3038,6 +3066,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       if (parsedTasks) msg.tasks = parsedTasks;
       chatMessages.push(msg);
       renderChatMessages();
+      speakText(cleanReply);
 
     } catch (e) {
       hideTyping();
@@ -3061,6 +3090,109 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     this.style.height = 'auto';
     this.style.height = Math.min(this.scrollHeight, 120) + 'px';
   });
+
+  // --- Voice: Speech-to-Text ---
+  var recognition = null;
+  var isRecording = false;
+
+  if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+    var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    var finalTranscript = '';
+    var interimTranscript = '';
+
+    recognition.onresult = function(e) {
+      interimTranscript = '';
+      for (var i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) {
+          finalTranscript += e.results[i][0].transcript;
+        } else {
+          interimTranscript += e.results[i][0].transcript;
+        }
+      }
+      var input = document.getElementById('chat-input');
+      input.value = finalTranscript + interimTranscript;
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+    };
+
+    recognition.onend = function() {
+      if (isRecording) {
+        // If still in recording mode, auto-send what we got
+        isRecording = false;
+        document.getElementById('chat-mic').classList.remove('recording');
+        var input = document.getElementById('chat-input');
+        if (input.value.trim()) {
+          sendChatMessage();
+        }
+      }
+    };
+
+    recognition.onerror = function(e) {
+      isRecording = false;
+      document.getElementById('chat-mic').classList.remove('recording');
+      if (e.error !== 'no-speech' && e.error !== 'aborted') {
+        addChatMessage('system', 'Mic error: ' + e.error);
+      }
+    };
+  }
+
+  document.getElementById('chat-mic').addEventListener('click', function() {
+    if (!recognition) {
+      addChatMessage('system', 'Speech recognition is not supported in this browser. Try Chrome.');
+      return;
+    }
+    if (isRecording) {
+      isRecording = false;
+      recognition.stop();
+      this.classList.remove('recording');
+    } else {
+      finalTranscript = '';
+      interimTranscript = '';
+      document.getElementById('chat-input').value = '';
+      isRecording = true;
+      this.classList.add('recording');
+      recognition.start();
+    }
+  });
+
+  // --- Voice: Text-to-Speech ---
+  var ttsEnabled = true;
+  var TTS_KEY = 'commandcenter_tts';
+  ttsEnabled = localStorage.getItem(TTS_KEY) !== 'false';
+
+  var ttsToggle = document.getElementById('chat-tts-toggle');
+  ttsToggle.classList.toggle('chat-tts-off', !ttsEnabled);
+  ttsToggle.textContent = ttsEnabled ? '\uD83D\uDD0A' : '\uD83D\uDD07';
+
+  ttsToggle.addEventListener('click', function() {
+    ttsEnabled = !ttsEnabled;
+    localStorage.setItem(TTS_KEY, ttsEnabled);
+    this.classList.toggle('chat-tts-off', !ttsEnabled);
+    this.textContent = ttsEnabled ? '\uD83D\uDD0A' : '\uD83D\uDD07';
+    if (!ttsEnabled) speechSynthesis.cancel();
+  });
+
+  function speakText(text) {
+    if (!ttsEnabled || !('speechSynthesis' in window)) return;
+    // Strip task JSON artifacts and keep conversational text
+    var clean = text.replace(/```[\s\S]*?```/g, '').replace(/\[.*?\]/g, '').trim();
+    if (!clean) return;
+    speechSynthesis.cancel();
+    var utterance = new SpeechSynthesisUtterance(clean);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    // Try to pick a good voice
+    var voices = speechSynthesis.getVoices();
+    var preferred = voices.find(function(v) { return v.lang.startsWith('en') && v.name.includes('Google'); })
+      || voices.find(function(v) { return v.lang.startsWith('en'); });
+    if (preferred) utterance.voice = preferred;
+    speechSynthesis.speak(utterance);
+  }
 
   // --- Gist Sync ---
   var GIST_TOKEN_KEY = 'commandcenter_gh_token';
