@@ -2971,17 +2971,23 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         actionsDiv.className = 'chat-actions';
         var addBtn = document.createElement('button');
         addBtn.className = 'chat-action-btn';
-        var hasAdds = msg.tasks.some(function(t) { return !t.action || t.action === 'add'; });
-        var hasUpdates = msg.tasks.some(function(t) { return t.action === 'update'; });
-        var hasDeletes = msg.tasks.some(function(t) { return t.action === 'delete'; });
-        var btnLabel = '\u2713 Apply changes';
-        if (hasAdds && !hasUpdates && !hasDeletes) btnLabel = '\u2713 Add these tasks';
-        addBtn.textContent = btnLabel;
-        addBtn.addEventListener('click', function() {
-          executeActions(msg.tasks);
-          addBtn.textContent = 'Applied!';
+        if (msg.applied) {
+          addBtn.textContent = '\u2713 Applied!';
           addBtn.disabled = true;
-        });
+        } else {
+          var hasAdds = msg.tasks.some(function(t) { return !t.action || t.action === 'add'; });
+          var hasUpdates = msg.tasks.some(function(t) { return t.action === 'update'; });
+          var hasDeletes = msg.tasks.some(function(t) { return t.action === 'delete'; });
+          var btnLabel = '\u2713 Apply changes';
+          if (hasAdds && !hasUpdates && !hasDeletes) btnLabel = '\u2713 Add these tasks';
+          addBtn.textContent = btnLabel;
+          addBtn.addEventListener('click', function() {
+            executeActions(msg.tasks);
+            msg.applied = true;
+            addBtn.textContent = '\u2713 Applied!';
+            addBtn.disabled = true;
+          });
+        }
         actionsDiv.appendChild(addBtn);
         div.appendChild(actionsDiv);
       }
@@ -3235,9 +3241,16 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       }
 
       var msg = { role: 'assistant', content: cleanReply };
-      if (parsedTasks) msg.tasks = parsedTasks;
+      if (parsedTasks) {
+        msg.tasks = parsedTasks;
+        msg.applied = true;
+      }
       chatMessages.push(msg);
       renderChatMessages();
+      // Auto-execute actions immediately
+      if (parsedTasks && parsedTasks.length > 0) {
+        executeActions(parsedTasks);
+      }
       speakText(cleanReply);
 
     } catch (e) {
@@ -3270,12 +3283,14 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     recognition = new SpeechRecognition();
-    recognition.continuous = false;
+    recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
     var finalTranscript = '';
     var interimTranscript = '';
+    var silenceTimer = null;
+    var SILENCE_DELAY = 2500; // 2.5 seconds of silence before auto-send
 
     recognition.onresult = function(e) {
       interimTranscript = '';
@@ -3290,11 +3305,26 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       input.value = finalTranscript + interimTranscript;
       input.style.height = 'auto';
       input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+
+      // Reset silence timer — wait for a pause before auto-sending
+      if (silenceTimer) clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(function() {
+        if (isRecording) {
+          isRecording = false;
+          recognition.stop();
+          document.getElementById('chat-mic').classList.remove('recording');
+          var inp = document.getElementById('chat-input');
+          if (inp.value.trim()) {
+            sendChatMessage();
+          }
+        }
+      }, SILENCE_DELAY);
     };
 
     recognition.onend = function() {
+      if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
       if (isRecording) {
-        // If still in recording mode, auto-send what we got
+        // Browser stopped recognition unexpectedly (e.g. long silence) — auto-send
         isRecording = false;
         document.getElementById('chat-mic').classList.remove('recording');
         var input = document.getElementById('chat-input');
@@ -3320,8 +3350,14 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     }
     if (isRecording) {
       isRecording = false;
+      if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
       recognition.stop();
       this.classList.remove('recording');
+      // Send what we have on manual stop
+      var inp = document.getElementById('chat-input');
+      if (inp.value.trim()) {
+        sendChatMessage();
+      }
     } else {
       finalTranscript = '';
       interimTranscript = '';
