@@ -3062,6 +3062,20 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
             return title === searchTerm || title.includes(searchTerm) || searchTerm.includes(title);
           });
         }
+        if (a.addToProject && !parentTask) {
+          // Couldn't find the project — try broader search
+          var projects = tasks.filter(function(t) { return t.isProject; });
+          if (projects.length === 1) {
+            parentTask = projects[0]; // Only one project, assume that's it
+          } else if (projects.length > 1) {
+            // Try word overlap matching
+            var words = searchTerm.split(/\s+/);
+            parentTask = projects.find(function(t) {
+              var tWords = t.title.toLowerCase();
+              return words.some(function(w) { return w.length > 2 && tWords.includes(w); });
+            });
+          }
+        }
         if (parentTask) {
           // Adding subtasks to existing project
           var subs = a.subtasks || [{ title: a.title, urgency: a.urgency, due: a.due || a.dueDate, notes: a.notes }];
@@ -3169,7 +3183,11 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     if (counts.added) parts.push(counts.added + ' added');
     if (counts.updated) parts.push(counts.updated + ' updated');
     if (counts.deleted) parts.push(counts.deleted + ' deleted');
-    addChatMessage('system', '\u2713 ' + (parts.join(', ') || 'No changes'));
+    if (parts.length > 0) {
+      addChatMessage('system', '\u2713 ' + parts.join(', '));
+    } else {
+      addChatMessage('system', '\u26A0 No changes applied. Actions received: ' + JSON.stringify(actions.map(function(a) { return { action: a.action, title: a.title, addToProject: a.addToProject, id: a.id }; })));
+    }
   }
 
   async function sendChatMessage() {
@@ -3260,15 +3278,32 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       var result = await resp.json();
       var reply = result.content[0].text;
 
-      // Extract actions JSON if present (support ```actions, ```tasks, ```json, or bare ```)
-      var actionMatch = reply.match(/```(?:actions|tasks|json)?\s*\n(\[[\s\S]*?\])\s*\n```/);
+      // Extract actions JSON — try multiple patterns
       var parsedTasks = null;
-      var cleanReply = reply.replace(/```(?:actions|tasks|json)?\s*\n\[[\s\S]*?\]\s*\n```/g, '').trim();
+      var cleanReply = reply;
+
+      // Try fenced code block first (```actions, ```json, ```tasks, or bare ```)
+      var actionMatch = reply.match(/```(?:actions|tasks|json)?\s*\n(\[[\s\S]*?\n\s*\])\s*\n```/);
+      if (!actionMatch) {
+        // Try without trailing newline before closing fence
+        actionMatch = reply.match(/```(?:actions|tasks|json)?\s*\n(\[[\s\S]*?\])\s*```/);
+      }
+      if (!actionMatch) {
+        // Last resort: find a JSON array that looks like actions anywhere in the reply
+        actionMatch = reply.match(/(\[\s*\{[\s\S]*?"action"\s*:\s*"(?:add|update|delete)"[\s\S]*?\}\s*\])/);
+      }
 
       if (actionMatch) {
+        cleanReply = reply.replace(actionMatch[0], '').trim();
+        // Also strip leftover empty fences
+        cleanReply = cleanReply.replace(/```(?:actions|tasks|json)?\s*```/g, '').trim();
         try {
           parsedTasks = JSON.parse(actionMatch[1]);
-        } catch (e) { /* ignore parse error */ }
+          if (!Array.isArray(parsedTasks)) parsedTasks = null;
+        } catch (e) {
+          console.warn('Action JSON parse failed:', e.message, actionMatch[1]);
+          addChatMessage('system', '\u26A0 Could not parse task actions from response. Try rephrasing.');
+        }
       }
 
       var msg = { role: 'assistant', content: cleanReply };
