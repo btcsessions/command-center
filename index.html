@@ -2941,13 +2941,19 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       div.className = 'chat-msg ' + msg.role;
       div.textContent = msg.content;
 
-      // If assistant message contains task suggestions, add action buttons
+      // If assistant message contains task/action suggestions, add action buttons
       if (msg.role === 'assistant' && msg.tasks && msg.tasks.length > 0) {
         var taskList = document.createElement('ul');
         taskList.className = 'chat-tasks';
         msg.tasks.forEach(function(t) {
           var li = document.createElement('li');
-          li.textContent = (t.isProject ? '\uD83D\uDCC1 ' : '\u2022 ') + t.title;
+          var action = t.action || 'add';
+          var icon = action === 'delete' ? '\uD83D\uDDD1 ' : action === 'update' ? '\u270F\uFE0F ' : (t.isProject ? '\uD83D\uDCC1 ' : '\u2795 ');
+          var label = action === 'delete' ? 'Delete: ' : action === 'update' ? 'Update: ' : '';
+          li.textContent = icon + label + (t.title || t.id || '');
+          if (t.addToProject) {
+            li.textContent += ' \u2192 ' + t.addToProject;
+          }
           taskList.appendChild(li);
           if (t.subtasks && t.subtasks.length > 0) {
             t.subtasks.forEach(function(st) {
@@ -2961,18 +2967,23 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         });
         div.appendChild(taskList);
 
-        var actions = document.createElement('div');
-        actions.className = 'chat-actions';
+        var actionsDiv = document.createElement('div');
+        actionsDiv.className = 'chat-actions';
         var addBtn = document.createElement('button');
         addBtn.className = 'chat-action-btn';
-        addBtn.textContent = '\u2713 Add these tasks';
+        var hasAdds = msg.tasks.some(function(t) { return !t.action || t.action === 'add'; });
+        var hasUpdates = msg.tasks.some(function(t) { return t.action === 'update'; });
+        var hasDeletes = msg.tasks.some(function(t) { return t.action === 'delete'; });
+        var btnLabel = '\u2713 Apply changes';
+        if (hasAdds && !hasUpdates && !hasDeletes) btnLabel = '\u2713 Add these tasks';
+        addBtn.textContent = btnLabel;
         addBtn.addEventListener('click', function() {
-          addTasksFromChat(msg.tasks);
-          addBtn.textContent = 'Added!';
+          executeActions(msg.tasks);
+          addBtn.textContent = 'Applied!';
           addBtn.disabled = true;
         });
-        actions.appendChild(addBtn);
-        div.appendChild(actions);
+        actionsDiv.appendChild(addBtn);
+        div.appendChild(actionsDiv);
       }
 
       container.appendChild(div);
@@ -2998,44 +3009,141 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     if (typing) typing.remove();
   }
 
-  function addTasksFromChat(chatTasks) {
-    chatTasks.forEach(function(t) {
-      var task = {
-        id: generateId(),
-        title: t.title,
-        category: t.category || (categories.length > 0 ? categories[0].id : 'work'),
-        urgency: t.urgency || 'medium',
-        due: t.due || null,
-        isProject: t.isProject || false,
-        parentId: null,
-        subtaskOrder: [],
-        createdAt: new Date().toISOString()
-      };
-      tasks.push(task);
+  function buildTasksSummary() {
+    var summary = [];
+    var topLevel = tasks.filter(function(t) { return !t.parentId; });
+    topLevel.forEach(function(t) {
+      var line = (t.isProject ? '[PROJECT] ' : '[TASK] ')
+        + '"' + t.title + '" (id:' + t.id + ', category:' + t.category
+        + ', urgency:' + (t.urgency || 'medium')
+        + (t.due ? ', due:' + t.due : '')
+        + (t.notes ? ', notes:"' + t.notes.substring(0, 60) + '"' : '') + ')';
+      summary.push(line);
+      if (t.isProject && t.subtaskOrder && t.subtaskOrder.length > 0) {
+        t.subtaskOrder.forEach(function(sid) {
+          var st = tasks.find(function(x) { return x.id === sid; });
+          if (st) {
+            summary.push('  └ "' + st.title + '" (id:' + st.id
+              + (st.due ? ', due:' + st.due : '')
+              + (st.notes ? ', notes:"' + st.notes.substring(0, 40) + '"' : '') + ')');
+          }
+        });
+      }
+    });
+    return summary.length > 0 ? summary.join('\n') : '(no tasks yet)';
+  }
 
-      // Add subtasks if present
-      if (t.subtasks && t.subtasks.length > 0) {
-        task.isProject = true;
-        t.subtasks.forEach(function(st) {
-          var sub = {
+  function executeActions(actions) {
+    var counts = { added: 0, updated: 0, deleted: 0 };
+    actions.forEach(function(a) {
+      var action = a.action || 'add';
+
+      if (action === 'add') {
+        // Add to existing project?
+        var parentTask = null;
+        if (a.addToProject) {
+          parentTask = tasks.find(function(t) {
+            return t.id === a.addToProject || (t.isProject && t.title.toLowerCase() === String(a.addToProject).toLowerCase());
+          });
+        }
+        if (parentTask) {
+          // Adding subtasks to existing project
+          var subs = a.subtasks || [{ title: a.title, urgency: a.urgency, due: a.due, notes: a.notes }];
+          subs.forEach(function(st) {
+            var sub = {
+              id: generateId(),
+              title: st.title || st,
+              category: parentTask.category,
+              urgency: st.urgency || parentTask.urgency || 'medium',
+              due: st.due || null,
+              notes: st.notes || null,
+              isProject: false,
+              parentId: parentTask.id,
+              subtaskOrder: [],
+              createdAt: new Date().toISOString()
+            };
+            tasks.push(sub);
+            parentTask.subtaskOrder.push(sub.id);
+            counts.added++;
+          });
+        } else {
+          // New top-level task or project
+          var task = {
             id: generateId(),
-            title: st.title || st,
-            category: task.category,
-            urgency: st.urgency || task.urgency,
-            due: st.due || null,
-            isProject: false,
-            parentId: task.id,
+            title: a.title,
+            category: a.category || (categories.length > 0 ? categories[0].id : 'work'),
+            urgency: a.urgency || 'medium',
+            due: a.due || null,
+            notes: a.notes || null,
+            isProject: a.isProject || false,
+            parentId: null,
             subtaskOrder: [],
             createdAt: new Date().toISOString()
           };
-          tasks.push(sub);
-          task.subtaskOrder.push(sub.id);
+          tasks.push(task);
+          counts.added++;
+          if (a.subtasks && a.subtasks.length > 0) {
+            task.isProject = true;
+            a.subtasks.forEach(function(st) {
+              var sub = {
+                id: generateId(),
+                title: st.title || st,
+                category: task.category,
+                urgency: st.urgency || task.urgency,
+                due: st.due || null,
+                notes: st.notes || null,
+                isProject: false,
+                parentId: task.id,
+                subtaskOrder: [],
+                createdAt: new Date().toISOString()
+              };
+              tasks.push(sub);
+              task.subtaskOrder.push(sub.id);
+              counts.added++;
+            });
+          }
+        }
+      } else if (action === 'update') {
+        var target = tasks.find(function(t) {
+          return t.id === a.id || t.title.toLowerCase() === String(a.id).toLowerCase();
         });
+        if (target) {
+          if (a.title !== undefined) target.title = a.title;
+          if (a.urgency !== undefined) target.urgency = a.urgency;
+          if (a.due !== undefined) target.due = a.due;
+          if (a.category !== undefined) target.category = a.category;
+          if (a.notes !== undefined) target.notes = a.notes;
+          counts.updated++;
+        }
+      } else if (action === 'delete') {
+        var idx = tasks.findIndex(function(t) {
+          return t.id === a.id || t.title.toLowerCase() === String(a.id).toLowerCase();
+        });
+        if (idx > -1) {
+          var removed = tasks[idx];
+          // Remove subtasks if it's a project
+          if (removed.isProject) {
+            tasks = tasks.filter(function(t) { return t.parentId !== removed.id; });
+          }
+          // Remove from parent's subtaskOrder
+          if (removed.parentId) {
+            var parent = tasks.find(function(t) { return t.id === removed.parentId; });
+            if (parent) {
+              parent.subtaskOrder = parent.subtaskOrder.filter(function(sid) { return sid !== removed.id; });
+            }
+          }
+          tasks = tasks.filter(function(t) { return t.id !== removed.id; });
+          counts.deleted++;
+        }
       }
     });
     saveTasks();
     render();
-    addChatMessage('system', '\u2713 ' + chatTasks.length + ' task(s) added to your board.');
+    var parts = [];
+    if (counts.added) parts.push(counts.added + ' added');
+    if (counts.updated) parts.push(counts.updated + ' updated');
+    if (counts.deleted) parts.push(counts.deleted + ' deleted');
+    addChatMessage('system', '\u2713 ' + (parts.join(', ') || 'No changes'));
   }
 
   async function sendChatMessage() {
@@ -3057,37 +3165,33 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     showTyping();
 
     try {
+      var tasksSummary = buildTasksSummary();
       var systemPrompt = 'You are a project planning assistant for a task management app called Command Center. '
-        + 'Help users break projects into actionable tasks and subtasks.\n\n'
+        + 'You can ADD new tasks/projects, UPDATE existing ones, DELETE tasks, and add SUBTASKS to existing projects.\n\n'
         + 'Available categories: ' + categories.map(function(c) { return c.id + ' (' + c.name + ')'; }).join(', ') + '.\n\n'
-        + 'IMPORTANT: When the user describes a project with multiple steps, ALWAYS create a project with subtasks. '
-        + 'A project has "isProject":true and a "subtasks" array. Each subtask is a concrete action item.\n\n'
-        + 'When you have tasks ready, you MUST include this exact JSON format in your response:\n'
-        + '```tasks\n'
+        + '=== CURRENT TASKS ===\n' + tasksSummary + '\n=== END TASKS ===\n\n'
+        + 'When you have actions ready, include a JSON block in this EXACT format:\n'
+        + '```actions\n'
         + '[\n'
-        + '  {\n'
-        + '    "title": "Build garden shed",\n'
-        + '    "category": "personal",\n'
-        + '    "urgency": "medium",\n'
-        + '    "isProject": true,\n'
-        + '    "subtasks": [\n'
-        + '      {"title": "Buy lumber and materials"},\n'
-        + '      {"title": "Pour concrete foundation"},\n'
-        + '      {"title": "Frame the walls"},\n'
-        + '      {"title": "Install roof and siding"}\n'
-        + '    ]\n'
-        + '  },\n'
-        + '  {"title": "Simple standalone task", "category": "work", "urgency": "low", "isProject": false}\n'
+        + '  {"action":"add", "title":"New project", "category":"personal", "urgency":"medium", "isProject":true, "subtasks":[{"title":"Step 1"},{"title":"Step 2"}]},\n'
+        + '  {"action":"add", "title":"New subtask for existing project", "addToProject":"existing project id or title", "urgency":"medium"},\n'
+        + '  {"action":"update", "id":"task id or exact title", "title":"New title", "urgency":"high", "due":"2025-06-01", "notes":"some notes", "category":"work"},\n'
+        + '  {"action":"delete", "id":"task id or exact title"}\n'
         + ']\n'
         + '```\n\n'
+        + 'Action types:\n'
+        + '- "add": Create a new task or project. Use "addToProject" to add a subtask to an existing project (match by id or title).\n'
+        + '- "update": Modify an existing task. Use "id" (task id or exact title) to target it. Include only fields to change: title, urgency, due, notes, category.\n'
+        + '- "delete": Remove a task by "id" (task id or exact title). Deleting a project removes all its subtasks too.\n\n'
         + 'Rules:\n'
         + '- Any task with 2+ steps MUST be a project with subtasks\n'
-        + '- Subtasks should be specific and actionable, not vague\n'
+        + '- Subtasks should be specific and actionable\n'
         + '- Set urgency to low, medium, high, or critical\n'
-        + '- Pick the best matching category for each task\n'
-        + '- Ask clarifying questions if the project is too vague to break down\n'
+        + '- Pick the best matching category\n'
+        + '- Reference existing tasks by their id when updating/deleting\n'
+        + '- You can add subtasks to existing projects using addToProject\n'
         + '- Keep conversational responses concise\n'
-        + '- Always suggest the tasks JSON when you have enough info — don\'t wait to be asked';
+        + '- Always suggest actions JSON when you have enough info';
 
       var apiMessages = chatMessages
         .filter(function(m) { return m.role === 'user' || m.role === 'assistant'; })
@@ -3119,14 +3223,14 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       var result = await resp.json();
       var reply = result.content[0].text;
 
-      // Extract tasks JSON if present
-      var taskMatch = reply.match(/```tasks\s*\n([\s\S]*?)\n```/);
+      // Extract actions JSON if present (support both ```actions and ```tasks for backwards compat)
+      var actionMatch = reply.match(/```(?:actions|tasks)\s*\n([\s\S]*?)\n```/);
       var parsedTasks = null;
-      var cleanReply = reply.replace(/```tasks\s*\n[\s\S]*?\n```/g, '').trim();
+      var cleanReply = reply.replace(/```(?:actions|tasks)\s*\n[\s\S]*?\n```/g, '').trim();
 
-      if (taskMatch) {
+      if (actionMatch) {
         try {
-          parsedTasks = JSON.parse(taskMatch[1]);
+          parsedTasks = JSON.parse(actionMatch[1]);
         } catch (e) { /* ignore parse error */ }
       }
 
