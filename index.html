@@ -138,6 +138,14 @@ header .date {
   align-items: flex-start;
 }
 #app::-webkit-scrollbar { display: none; }
+@media (max-width: 639px) {
+  #app {
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-bottom: 80px;
+  }
+}
 @media (min-width: 640px) {
   #app { padding: 16px; }
 }
@@ -158,10 +166,10 @@ header .date {
 }
 @media (max-width: 639px) {
   .category {
-    min-width: calc(100vw - 16px);
-    max-width: calc(100vw - 16px);
-    flex: 0 0 calc(100vw - 16px);
-    margin-bottom: 60px;
+    min-width: 0;
+    max-width: 100%;
+    flex: 0 0 auto;
+    width: 100%;
   }
 }
 
@@ -3927,8 +3935,9 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   });
 })();
 
-// --- Mobile swipe: one card per swipe ---
+// --- Desktop/tablet swipe: one card per swipe (disabled on mobile vertical layout) ---
 (function() {
+  if (window.innerWidth < 640) return; // Mobile uses vertical stacking, no horizontal swipe
   var app = document.getElementById('app');
   var startX = 0;
   var startIndex = 0;
