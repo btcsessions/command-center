@@ -95,7 +95,6 @@ header .date {
   display: flex;
   gap: 12px;
   overflow-x: auto;
-  scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   scroll-padding: 8px;
@@ -2622,6 +2621,74 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   } else {
     init();
   }
+})();
+
+// --- Mobile swipe: one card per swipe ---
+(function() {
+  var app = document.getElementById('app');
+  var startX = 0;
+  var startScroll = 0;
+  var swiping = false;
+  var THRESHOLD = 30; // min px to count as swipe
+
+  function getCardPositions() {
+    var cards = app.querySelectorAll('.category, .add-category-card');
+    var positions = [];
+    var appRect = app.getBoundingClientRect();
+    cards.forEach(function(c) {
+      positions.push(c.offsetLeft - app.offsetLeft);
+    });
+    return positions;
+  }
+
+  function getCurrentIndex() {
+    var positions = getCardPositions();
+    var scrollLeft = app.scrollLeft;
+    var closest = 0;
+    var minDist = Infinity;
+    positions.forEach(function(pos, i) {
+      var dist = Math.abs(pos - scrollLeft);
+      if (dist < minDist) { minDist = dist; closest = i; }
+    });
+    return closest;
+  }
+
+  function scrollToIndex(idx) {
+    var positions = getCardPositions();
+    idx = Math.max(0, Math.min(idx, positions.length - 1));
+    app.scrollTo({ left: positions[idx], behavior: 'smooth' });
+  }
+
+  app.addEventListener('touchstart', function(e) {
+    // Don't hijack if touching a drag handle
+    if (e.target.closest('.drag-handle') || e.target.closest('.cat-drag-handle')) return;
+    startX = e.touches[0].clientX;
+    startScroll = app.scrollLeft;
+    swiping = true;
+  }, { passive: true });
+
+  app.addEventListener('touchmove', function(e) {
+    if (!swiping) return;
+    // Prevent native scroll so we control it
+    var dx = e.touches[0].clientX - startX;
+    app.scrollLeft = startScroll - dx;
+  }, { passive: true });
+
+  app.addEventListener('touchend', function(e) {
+    if (!swiping) return;
+    swiping = false;
+    var dx = e.changedTouches[0].clientX - startX;
+    var current = getCurrentIndex();
+    if (dx < -THRESHOLD) {
+      scrollToIndex(current + 1);
+    } else if (dx > THRESHOLD) {
+      scrollToIndex(current - 1);
+    } else {
+      scrollToIndex(current);
+    }
+  });
+
+  app.addEventListener('touchcancel', function() { swiping = false; });
 })();
 
 // Register service worker for PWA
