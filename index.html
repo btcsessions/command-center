@@ -1056,18 +1056,6 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 }
 
 /* Project expand arrow */
-.project-expand-arrow {
-  cursor: pointer; flex-shrink: 0; font-size: 0.7rem;
-  color: var(--text-muted); transition: transform 0.2s;
-  padding: 4px; width: 22px; min-height: 22px;
-  display: flex; align-items: center; justify-content: center;
-  background: none; border: none;
-}
-.project-expand-arrow:hover { color: var(--text); }
-.task-wrapper[data-expanded="true"] .project-expand-arrow {
-  transform: rotate(90deg);
-}
-
 /* Project content column — stacks title row and meta row */
 .project-content {
   flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;
@@ -1970,10 +1958,13 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     li.appendChild(urgDot);
 
     if (task.isProject) {
+      // Project: expandable layout - collapsed shows just title, expanded shows details + subtasks
+      var isProjExpanded = expandedProjects.has(task.id);
+      if (isProjExpanded) li.classList.add('task-expanded');
+
       // Project: expand arrow instead of checkbox
-      var projArrow = document.createElement('button');
-      projArrow.className = 'project-expand-arrow';
-      projArrow.setAttribute('aria-label', 'Expand project');
+      var projArrow = document.createElement('span');
+      projArrow.className = 'task-expand-indicator';
       projArrow.textContent = '\u25B6';
       li.appendChild(projArrow);
     } else {
@@ -1985,16 +1976,15 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     }
 
     if (task.isProject) {
-      // Project: two-row layout (title+progress on top, due date + badges below)
-      var contentCol = document.createElement('div');
-      contentCol.className = 'project-content';
-
-      var titleRow = document.createElement('div');
-      titleRow.className = 'project-title-row';
+      // Project: title always visible, details shown when expanded
       var title = document.createElement('span');
       title.className = 'task-title';
       title.textContent = task.title;
-      titleRow.appendChild(title);
+      li.appendChild(title);
+
+      // Details container (hidden when collapsed)
+      var details = document.createElement('span');
+      details.className = 'task-details';
 
       var progress = getSubtaskProgress(task.id);
       var progressEl = document.createElement('span');
@@ -2010,17 +2000,14 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       ptext.textContent = progress.done + '/' + progress.total;
       progressEl.appendChild(bar);
       progressEl.appendChild(ptext);
-      titleRow.appendChild(progressEl);
-      contentCol.appendChild(titleRow);
+      details.appendChild(progressEl);
 
-      var metaRow = document.createElement('div');
-      metaRow.className = 'project-meta-row';
       var dueInfo = formatDueDate(task.dueDate, todayStr);
       if (dueInfo) {
         var dueBadge = document.createElement('span');
         dueBadge.className = 'due-badge ' + dueInfo.cls;
         dueBadge.textContent = dueInfo.text;
-        metaRow.appendChild(dueBadge);
+        details.appendChild(dueBadge);
       }
       if (task.notes) {
         var notesBtn = document.createElement('button');
@@ -2028,17 +2015,16 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         notesBtn.setAttribute('aria-label', 'Toggle notes');
         notesBtn.textContent = '\uD83D\uDCDD';
         notesBtn.dataset.id = task.id;
-        metaRow.appendChild(notesBtn);
+        details.appendChild(notesBtn);
       }
-      if (metaRow.children.length > 0) contentCol.appendChild(metaRow);
-
-      li.appendChild(contentCol);
 
       var editBtn = document.createElement('button');
       editBtn.className = 'task-edit-btn';
       editBtn.setAttribute('aria-label', 'Edit task');
       editBtn.textContent = '\u270E';
-      li.appendChild(editBtn);
+      details.appendChild(editBtn);
+
+      li.appendChild(details);
     } else if (isSubtask) {
       // Subtask: expandable layout
       var isTaskExpanded = expandedTasks.has(task.id);
@@ -2866,22 +2852,6 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       if (!item) return;
       const task = tasks.find(function(t) { return t.id === item.dataset.id; });
       if (task) openModal('edit', task);
-      return;
-    }
-
-    // Project expand/collapse
-    var projArrow = e.target.closest('.project-expand-arrow');
-    if (projArrow) {
-      var wrapper = projArrow.closest('.task-wrapper');
-      if (wrapper) {
-        var pid = wrapper.dataset.id;
-        if (expandedProjects.has(pid)) {
-          expandedProjects.delete(pid);
-        } else {
-          expandedProjects.add(pid);
-        }
-        render();
-      }
       return;
     }
 
