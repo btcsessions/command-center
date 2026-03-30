@@ -621,36 +621,45 @@ header .date {
   border-color: var(--border);
   box-shadow: 0 4px 16px rgba(0,0,0,0.3);
 }
+@media (max-width: 639px) {
+  .chat-fab.open { display: none; }
+}
 
 .chat-panel {
   position: fixed;
   bottom: 0;
   right: 0;
+  left: 0;
+  top: 0;
   width: 100%;
-  max-width: 420px;
-  height: 70vh;
-  height: 70dvh;
-  background: rgba(6, 12, 8, 0.95);
+  height: 100%;
+  height: 100dvh;
+  background: rgba(6, 12, 8, 0.98);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-top: 1px solid rgba(0, 212, 170, 0.25);
-  border-left: 1px solid rgba(0, 212, 170, 0.25);
-  border-radius: 16px 16px 0 0;
+  border: none;
+  border-radius: 0;
   z-index: 950;
   display: flex;
   flex-direction: column;
   transform: translateY(110%);
   transition: transform 0.3s ease, visibility 0.3s;
-  box-shadow: 0 -8px 40px rgba(0,0,0,0.6), 0 0 20px rgba(57, 255, 20, 0.08), 0 0 40px rgba(57, 255, 20, 0.04);
+  box-shadow: none;
   visibility: hidden;
 }
 @media (min-width: 640px) {
   .chat-panel {
+    top: auto;
+    left: auto;
     bottom: 80px;
     right: 24px;
+    width: 100%;
+    max-width: 420px;
     height: 500px;
     border-radius: 16px;
     border: 1px solid rgba(0, 212, 170, 0.25);
+    box-shadow: 0 -8px 40px rgba(0,0,0,0.6), 0 0 20px rgba(57, 255, 20, 0.08), 0 0 40px rgba(57, 255, 20, 0.04);
+    background: rgba(6, 12, 8, 0.95);
   }
 }
 .chat-panel.open { transform: translateY(0); visibility: visible; }
@@ -660,6 +669,7 @@ header .date {
   align-items: center;
   justify-content: space-between;
   padding: 14px 16px;
+  padding-top: calc(14px + env(safe-area-inset-top, 0px));
   border-bottom: 1px solid rgba(0, 212, 170, 0.2);
   flex-shrink: 0;
   background: rgba(0, 212, 170, 0.03);
@@ -687,6 +697,11 @@ header .date {
   transition: all 0.15s;
 }
 .chat-close:hover { background: rgba(0, 212, 170, 0.08); color: #00d4aa; border-color: rgba(0, 212, 170, 0.2); }
+.chat-back {
+  font-size: 1.3rem;
+  color: #00d4aa;
+  padding: 4px 6px;
+}
 
 .chat-messages {
   flex: 1;
@@ -765,9 +780,11 @@ header .date {
   display: flex;
   gap: 8px;
   padding: 12px 16px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid rgba(0, 212, 170, 0.2);
   flex-shrink: 0;
   background: rgba(6, 12, 8, 0.98);
+  align-items: flex-end;
 }
 .chat-input {
   flex: 1;
@@ -1154,19 +1171,19 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 <button class="chat-fab" id="chat-fab" title="Plan with AI">AI</button>
 <div class="chat-panel" id="chat-panel">
   <div class="chat-header">
-    <span class="chat-header-title">&#x25C8; Project Planner</span>
-    <div style="display:flex;gap:4px;">
-      <button class="chat-close" id="chat-tts-toggle" title="Toggle voice replies">🔊</button>
-      <button class="chat-close" id="chat-close">&times;</button>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button class="chat-close chat-back" id="chat-close" title="Close">&#x2190;</button>
+      <span class="chat-header-title">&#x25C8; Project Planner</span>
     </div>
+    <button class="chat-close" id="chat-tts-toggle" title="Toggle voice replies">🔊</button>
   </div>
   <div class="chat-messages" id="chat-messages">
     <div class="chat-msg system">Describe a project and I'll help you break it into tasks. Tap the mic to talk.</div>
   </div>
   <div class="chat-input-bar">
-    <button class="chat-mic" id="chat-mic" title="Voice input">🎙️</button>
     <textarea class="chat-input" id="chat-input" placeholder="Describe a project..." rows="1"></textarea>
     <button class="chat-send" id="chat-send">&#x27A4;</button>
+    <button class="chat-mic" id="chat-mic" title="Voice input">🎙️</button>
   </div>
 </div>
 
