@@ -3518,13 +3518,11 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     recognition = new SpeechRecognition();
-    recognition.continuous = true;
+    recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
-    var finalTranscript = '';
-    var silenceTimer = null;
-    var SILENCE_DELAY = 2500;
+    var currentUtterance = '';
     var awaitingResponse = false;
 
     recognition.onresult = function(e) {
@@ -3533,62 +3531,40 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         speechSynthesis.cancel();
       }
 
-      // Rebuild transcript from ALL results to avoid duplication
-      var final = '';
-      var interim = '';
+      // With continuous=false, just grab the latest result
+      var transcript = '';
       for (var i = 0; i < e.results.length; i++) {
-        if (e.results[i].isFinal) {
-          final += e.results[i][0].transcript;
-        } else {
-          interim += e.results[i][0].transcript;
-        }
+        transcript += e.results[i][0].transcript;
       }
-      finalTranscript = final;
+      currentUtterance = transcript;
       var input = document.getElementById('chat-input');
-      input.value = (final + interim).trim();
+      input.value = transcript;
       input.style.height = 'auto';
       input.style.height = Math.min(input.scrollHeight, 120) + 'px';
-
-      // Reset silence timer
-      if (silenceTimer) clearTimeout(silenceTimer);
-      if (!awaitingResponse && input.value.trim()) {
-        silenceTimer = setTimeout(function() {
-          if (isRecording) {
-            var inp = document.getElementById('chat-input');
-            if (inp.value.trim()) {
-              lastInputWasVoice = true;
-              awaitingResponse = true;
-              sendChatMessage();
-              // Reset for next turn but don't stop recognition
-              finalTranscript = '';
-            }
-          }
-        }, SILENCE_DELAY);
-      }
     };
 
     recognition.onend = function() {
-      if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
-      if (voiceConversationMode && isRecording) {
-        // Browser killed recognition (timeout etc.) — restart with clean slate
-        finalTranscript = '';
-        try { recognition.start(); } catch(e) { /* already running */ }
-      } else if (isRecording) {
+      if (isRecording && currentUtterance.trim()) {
+        // Got a complete utterance — send it
+        lastInputWasVoice = true;
+        awaitingResponse = true;
+        currentUtterance = '';
+        sendChatMessage();
+        // Don't restart recognition yet — wait for response + TTS to finish
+      } else if (isRecording && voiceConversationMode) {
+        // No speech detected but still in conversation mode — keep listening
+        currentUtterance = '';
+        try { recognition.start(); } catch(e) {}
+      } else {
         isRecording = false;
         document.getElementById('chat-mic').classList.remove('recording');
-        var input = document.getElementById('chat-input');
-        if (input.value.trim()) {
-          lastInputWasVoice = true;
-          sendChatMessage();
-        }
-        finalTranscript = '';
       }
     };
 
     recognition.onerror = function(e) {
       if (e.error === 'no-speech' || e.error === 'aborted') {
-        // In conversation mode, just restart
         if (voiceConversationMode && isRecording) {
+          currentUtterance = '';
           try { recognition.start(); } catch(ex) {}
         }
         return;
@@ -3600,12 +3576,15 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     };
   }
 
-  // Called after TTS finishes speaking — reset for next voice turn
+  // Called after TTS finishes — restart listening for next turn
   function onSpeechDone() {
     awaitingResponse = false;
-    finalTranscript = '';
+    currentUtterance = '';
     document.getElementById('chat-input').value = '';
-    // Recognition should still be running in conversation mode
+    // Restart recognition for next voice turn
+    if (voiceConversationMode && isRecording && recognition) {
+      try { recognition.start(); } catch(e) {}
+    }
   }
 
   document.getElementById('chat-mic').addEventListener('click', function() {
@@ -3618,7 +3597,6 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       isRecording = false;
       voiceConversationMode = false;
       awaitingResponse = false;
-      if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
       if ('speechSynthesis' in window && speechSynthesis.speaking) {
         speechSynthesis.cancel();
       }
@@ -3632,7 +3610,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       }
     } else {
       // Enter voice conversation mode
-      finalTranscript = '';
+      currentUtterance = '';
       awaitingResponse = false;
       document.getElementById('chat-input').value = '';
       isRecording = true;
