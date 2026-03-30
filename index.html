@@ -1033,9 +1033,11 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 .project-expand-arrow {
   cursor: pointer; flex-shrink: 0; font-size: 0.7rem;
   color: var(--text-muted); transition: transform 0.2s;
-  padding: 4px; width: 22px; min-height: 22px;
+  padding: 4px; min-width: 44px; min-height: 44px;
   display: flex; align-items: center; justify-content: center;
   background: none; border: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(255,255,255,0.1);
 }
 .project-expand-arrow:hover { color: var(--text); }
 .task-wrapper[data-expanded="true"] .project-expand-arrow {
@@ -2822,10 +2824,13 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       return;
     }
 
-    // Project expand/collapse
+    // Project expand/collapse — tap arrow OR anywhere on the project row
     var projArrow = e.target.closest('.project-expand-arrow');
-    if (projArrow) {
-      var wrapper = projArrow.closest('.task-wrapper');
+    var projItem = e.target.closest('.task-item');
+    var projWrapper = projItem ? projItem.closest('.task-wrapper') : null;
+    var isProjectTap = projArrow || (projWrapper && projWrapper.dataset.expanded !== undefined);
+    if (isProjectTap) {
+      var wrapper = projArrow ? projArrow.closest('.task-wrapper') : projWrapper;
       if (wrapper) {
         var pid = wrapper.dataset.id;
         if (expandedProjects.has(pid)) {
