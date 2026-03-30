@@ -579,6 +579,213 @@ header .date {
 .btn-secondary { background: var(--surface-hover); color: var(--text); }
 .btn-danger { background: var(--danger); color: #fff; }
 
+/* Chat panel */
+.chat-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #00d4aa;
+  color: #0a1410;
+  border: none;
+  font-size: 1.4rem;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 212, 170, 0.3);
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.chat-fab:hover { transform: scale(1.08); box-shadow: 0 6px 24px rgba(0, 212, 170, 0.4); }
+.chat-fab.open { background: var(--surface-hover); color: var(--text); box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+
+.chat-panel {
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  width: 100%;
+  max-width: 420px;
+  height: 70vh;
+  height: 70dvh;
+  background: rgba(10, 20, 16, 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  border-radius: 16px 16px 0 0;
+  z-index: 950;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  transition: transform 0.3s ease;
+  box-shadow: 0 -8px 40px rgba(0,0,0,0.5);
+}
+@media (min-width: 640px) {
+  .chat-panel {
+    bottom: 80px;
+    right: 24px;
+    height: 500px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+  }
+}
+.chat-panel.open { transform: translateY(0); }
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.chat-header-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.chat-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+.chat-close:hover { background: var(--surface-hover); color: var(--text); }
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-msg {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+.chat-msg.user {
+  align-self: flex-end;
+  background: rgba(0, 212, 170, 0.15);
+  border: 1px solid rgba(0, 212, 170, 0.25);
+  color: var(--text);
+}
+.chat-msg.assistant {
+  align-self: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.chat-msg.system {
+  align-self: center;
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 4px;
+  max-width: 100%;
+}
+.chat-msg.assistant .chat-tasks {
+  margin-top: 8px;
+  padding: 0;
+  list-style: none;
+}
+.chat-msg.assistant .chat-tasks li {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+.chat-msg.assistant .chat-tasks li:last-child { border-bottom: none; }
+.chat-typing {
+  align-self: flex-start;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 8px 14px;
+}
+.chat-typing::after {
+  content: '';
+  animation: dots 1.2s steps(4) infinite;
+}
+@keyframes dots {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75% { content: '...'; }
+}
+
+.chat-input-bar {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  background: rgba(10, 20, 16, 0.98);
+}
+.chat-input {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: none;
+  min-height: 42px;
+  max-height: 120px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.chat-input:focus { border-color: #00d4aa; }
+.chat-input::placeholder { color: var(--text-muted); }
+.chat-send {
+  background: #00d4aa;
+  color: #0a1410;
+  border: none;
+  border-radius: 10px;
+  width: 42px;
+  flex-shrink: 0;
+  cursor: pointer;
+  font-size: 1.1rem;
+  font-weight: 700;
+  transition: opacity 0.15s;
+}
+.chat-send:disabled { opacity: 0.4; cursor: not-allowed; }
+.chat-send:hover:not(:disabled) { opacity: 0.85; }
+
+.chat-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.chat-action-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #00d4aa;
+  background: rgba(0, 212, 170, 0.1);
+  color: #00d4aa;
+  font-size: 0.8rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+.chat-action-btn:hover { background: rgba(0, 212, 170, 0.2); }
+
 .hidden { display: none !important; }
 
 /* Touch drag ghost */
@@ -856,12 +1063,19 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 
 <div class="modal-overlay" id="settings-modal-overlay">
   <div class="modal-content">
-    <h2 class="modal-title">Sync Settings</h2>
+    <h2 class="modal-title">Settings</h2>
     <div class="form-group">
-      <label for="settings-token">GitHub Personal Access Token</label>
+      <label for="settings-token">GitHub Token (for sync)</label>
       <input type="password" id="settings-token" class="form-input" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off">
       <p style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">
-        Create at GitHub &rarr; Settings &rarr; Developer settings &rarr; Personal access tokens &rarr; Tokens (classic). Only the <strong>gist</strong> scope is needed.
+        Create at GitHub &rarr; Settings &rarr; Developer settings &rarr; Personal access tokens. Only the <strong>gist</strong> scope is needed.
+      </p>
+    </div>
+    <div class="form-group">
+      <label for="settings-claude-key">Claude API Key (for chat planner)</label>
+      <input type="password" id="settings-claude-key" class="form-input" placeholder="sk-ant-xxxxxxxxxxxx" autocomplete="off">
+      <p style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">
+        Get your key at <strong>console.anthropic.com</strong>. Powers the AI project planner chat.
       </p>
     </div>
     <div class="form-group" id="settings-gist-info" style="display:none;">
@@ -873,6 +1087,22 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       <button type="button" class="btn btn-secondary" id="settings-cancel">Cancel</button>
       <button type="button" class="btn btn-primary" id="settings-save">Save</button>
     </div>
+  </div>
+</div>
+
+<!-- Chat Panel -->
+<button class="chat-fab" id="chat-fab" title="Plan with AI">💬</button>
+<div class="chat-panel" id="chat-panel">
+  <div class="chat-header">
+    <span class="chat-header-title">🤖 Project Planner</span>
+    <button class="chat-close" id="chat-close">&times;</button>
+  </div>
+  <div class="chat-messages" id="chat-messages">
+    <div class="chat-msg system">Describe a project and I'll help you break it into tasks. Tap the mic on your keyboard to dictate.</div>
+  </div>
+  <div class="chat-input-bar">
+    <textarea class="chat-input" id="chat-input" placeholder="Describe a project..." rows="1"></textarea>
+    <button class="chat-send" id="chat-send">&#x27A4;</button>
   </div>
 </div>
 
@@ -2607,6 +2837,231 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     if (e.target === this) closeCatModal();
   });
 
+  // --- Chat Panel ---
+  var chatMessages = [];
+  var CLAUDE_KEY_STORAGE = 'commandcenter_claude_key';
+
+  function getClaudeKey() { return localStorage.getItem(CLAUDE_KEY_STORAGE) || ''; }
+  function setClaudeKey(k) { localStorage.setItem(CLAUDE_KEY_STORAGE, k); }
+
+  function toggleChat() {
+    var panel = document.getElementById('chat-panel');
+    var fab = document.getElementById('chat-fab');
+    var isOpen = panel.classList.toggle('open');
+    fab.classList.toggle('open', isOpen);
+    fab.textContent = isOpen ? '\u2715' : '\uD83D\uDCAC';
+    if (isOpen) {
+      setTimeout(function() { document.getElementById('chat-input').focus(); }, 300);
+    }
+  }
+
+  document.getElementById('chat-fab').addEventListener('click', toggleChat);
+  document.getElementById('chat-close').addEventListener('click', toggleChat);
+
+  function addChatMessage(role, content) {
+    chatMessages.push({ role: role, content: content });
+    renderChatMessages();
+  }
+
+  function renderChatMessages() {
+    var container = document.getElementById('chat-messages');
+    // Keep the system intro message
+    var msgs = container.querySelectorAll('.chat-msg:not(.system)');
+    msgs.forEach(function(m) { m.remove(); });
+    // Remove typing indicator if present
+    var typing = container.querySelector('.chat-typing');
+    if (typing) typing.remove();
+
+    chatMessages.forEach(function(msg, idx) {
+      var div = document.createElement('div');
+      div.className = 'chat-msg ' + msg.role;
+      div.textContent = msg.content;
+
+      // If assistant message contains task suggestions, add action buttons
+      if (msg.role === 'assistant' && msg.tasks && msg.tasks.length > 0) {
+        var taskList = document.createElement('ul');
+        taskList.className = 'chat-tasks';
+        msg.tasks.forEach(function(t) {
+          var li = document.createElement('li');
+          li.textContent = (t.isProject ? '\uD83D\uDCC1 ' : '\u2022 ') + t.title;
+          taskList.appendChild(li);
+        });
+        div.appendChild(taskList);
+
+        var actions = document.createElement('div');
+        actions.className = 'chat-actions';
+        var addBtn = document.createElement('button');
+        addBtn.className = 'chat-action-btn';
+        addBtn.textContent = '\u2713 Add these tasks';
+        addBtn.addEventListener('click', function() {
+          addTasksFromChat(msg.tasks);
+          addBtn.textContent = 'Added!';
+          addBtn.disabled = true;
+        });
+        actions.appendChild(addBtn);
+        div.appendChild(actions);
+      }
+
+      container.appendChild(div);
+    });
+
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function showTyping() {
+    var container = document.getElementById('chat-messages');
+    var existing = container.querySelector('.chat-typing');
+    if (existing) return;
+    var div = document.createElement('div');
+    div.className = 'chat-typing';
+    div.textContent = 'Thinking';
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function hideTyping() {
+    var container = document.getElementById('chat-messages');
+    var typing = container.querySelector('.chat-typing');
+    if (typing) typing.remove();
+  }
+
+  function addTasksFromChat(chatTasks) {
+    chatTasks.forEach(function(t) {
+      var task = {
+        id: generateId(),
+        title: t.title,
+        category: t.category || (categories.length > 0 ? categories[0].id : 'work'),
+        urgency: t.urgency || 'medium',
+        due: t.due || null,
+        isProject: t.isProject || false,
+        parentId: null,
+        subtaskOrder: [],
+        createdAt: new Date().toISOString()
+      };
+      tasks.push(task);
+
+      // Add subtasks if present
+      if (t.subtasks && t.subtasks.length > 0) {
+        task.isProject = true;
+        t.subtasks.forEach(function(st) {
+          var sub = {
+            id: generateId(),
+            title: st.title || st,
+            category: task.category,
+            urgency: st.urgency || task.urgency,
+            due: st.due || null,
+            isProject: false,
+            parentId: task.id,
+            subtaskOrder: [],
+            createdAt: new Date().toISOString()
+          };
+          tasks.push(sub);
+          task.subtaskOrder.push(sub.id);
+        });
+      }
+    });
+    saveTasks();
+    render();
+    addChatMessage('system', '\u2713 ' + chatTasks.length + ' task(s) added to your board.');
+  }
+
+  async function sendChatMessage() {
+    var input = document.getElementById('chat-input');
+    var text = input.value.trim();
+    if (!text) return;
+
+    input.value = '';
+    input.style.height = 'auto';
+    addChatMessage('user', text);
+
+    var apiKey = getClaudeKey();
+    if (!apiKey) {
+      addChatMessage('assistant', 'To use the AI planner, add your Claude API key in Sync Settings (\u2699). Once set, I can help break down projects into tasks.');
+      return;
+    }
+
+    document.getElementById('chat-send').disabled = true;
+    showTyping();
+
+    try {
+      var systemPrompt = 'You are a project planning assistant for a task management app called Command Center. '
+        + 'The user will describe projects or tasks. Help them break these into actionable tasks. '
+        + 'Available categories: ' + categories.map(function(c) { return c.id + ' (' + c.name + ')'; }).join(', ') + '. '
+        + 'When you have a clear set of tasks to suggest, include a JSON block in your response like this:\n'
+        + '```tasks\n[{"title":"Task name","category":"category_id","urgency":"low|medium|high|critical",'
+        + '"isProject":false,"subtasks":[{"title":"Subtask name"}]}]\n```\n'
+        + 'Keep your conversational responses concise. Ask clarifying questions if the project is vague. '
+        + 'Use isProject:true with subtasks for multi-step items. Set appropriate urgency levels.';
+
+      var apiMessages = chatMessages
+        .filter(function(m) { return m.role === 'user' || m.role === 'assistant'; })
+        .map(function(m) { return { role: m.role, content: m.content }; });
+
+      var resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1024,
+          system: systemPrompt,
+          messages: apiMessages
+        })
+      });
+
+      hideTyping();
+
+      if (!resp.ok) {
+        var errData = await resp.json().catch(function() { return {}; });
+        throw new Error(errData.error ? errData.error.message : ('HTTP ' + resp.status));
+      }
+
+      var result = await resp.json();
+      var reply = result.content[0].text;
+
+      // Extract tasks JSON if present
+      var taskMatch = reply.match(/```tasks\s*\n([\s\S]*?)\n```/);
+      var parsedTasks = null;
+      var cleanReply = reply.replace(/```tasks\s*\n[\s\S]*?\n```/g, '').trim();
+
+      if (taskMatch) {
+        try {
+          parsedTasks = JSON.parse(taskMatch[1]);
+        } catch (e) { /* ignore parse error */ }
+      }
+
+      var msg = { role: 'assistant', content: cleanReply };
+      if (parsedTasks) msg.tasks = parsedTasks;
+      chatMessages.push(msg);
+      renderChatMessages();
+
+    } catch (e) {
+      hideTyping();
+      addChatMessage('assistant', 'Error: ' + e.message);
+    } finally {
+      document.getElementById('chat-send').disabled = false;
+    }
+  }
+
+  document.getElementById('chat-send').addEventListener('click', sendChatMessage);
+
+  document.getElementById('chat-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendChatMessage();
+    }
+  });
+
+  // Auto-grow textarea
+  document.getElementById('chat-input').addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+  });
+
   // --- Gist Sync ---
   var GIST_TOKEN_KEY = 'commandcenter_gh_token';
   var GIST_ID_KEY = 'commandcenter_gist_id';
@@ -2747,6 +3202,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   document.getElementById('btn-settings').addEventListener('click', function() {
     var overlay = document.getElementById('settings-modal-overlay');
     document.getElementById('settings-token').value = getToken();
+    document.getElementById('settings-claude-key').value = getClaudeKey();
     var gistId = getGistId();
     var gistInfo = document.getElementById('settings-gist-info');
     if (gistId) {
@@ -2766,7 +3222,9 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 
   document.getElementById('settings-save').addEventListener('click', async function() {
     var token = document.getElementById('settings-token').value.trim();
+    var claudeKey = document.getElementById('settings-claude-key').value.trim();
     setToken(token);
+    setClaudeKey(claudeKey);
     document.getElementById('settings-modal-overlay').classList.remove('open');
     document.body.style.overflow = '';
     // Auto-discover existing Gist if none linked
