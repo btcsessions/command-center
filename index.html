@@ -161,6 +161,7 @@ header .date {
     min-width: calc(100vw - 16px);
     max-width: calc(100vw - 16px);
     flex: 0 0 calc(100vw - 16px);
+    margin-bottom: 60px;
   }
 }
 
@@ -585,6 +586,41 @@ header .date {
 .btn-danger { background: var(--danger); color: #fff; }
 
 /* Chat panel */
+/* Mobile dock bar — always visible at bottom on mobile */
+.chat-dock {
+  display: none;
+}
+@media (max-width: 639px) {
+  .chat-dock {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    background: rgba(6, 12, 8, 0.98);
+    border-top: 1px solid rgba(0, 212, 170, 0.2);
+    z-index: 890;
+    align-items: flex-end;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .chat-dock .chat-input {
+    flex: 1;
+    min-height: 40px;
+    max-height: 40px;
+  }
+  .chat-dock .chat-mic {
+    width: 40px;
+    height: 40px;
+  }
+  .chat-dock.hidden {
+    display: none;
+  }
+}
+
 .chat-fab {
   position: fixed;
   bottom: 24px;
@@ -609,6 +645,9 @@ header .date {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
+@media (max-width: 639px) {
+  .chat-fab { display: none; }
+}
 .chat-fab:hover {
   transform: scale(1.06);
   border-color: rgba(0, 212, 170, 0.7);
@@ -620,9 +659,6 @@ header .date {
   color: var(--text-muted);
   border-color: var(--border);
   box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-}
-@media (max-width: 639px) {
-  .chat-fab.open { display: none; }
 }
 
 .chat-panel {
@@ -1168,6 +1204,10 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 </div>
 
 <!-- Chat Panel -->
+<div class="chat-dock" id="chat-dock">
+  <textarea class="chat-input" id="chat-dock-input" placeholder="Plan a project..." rows="1"></textarea>
+  <button class="chat-mic" id="chat-dock-mic" title="Voice input">🎙️</button>
+</div>
 <button class="chat-fab" id="chat-fab" title="Plan with AI">AI</button>
 <div class="chat-panel" id="chat-panel">
   <div class="chat-header">
@@ -2937,8 +2977,56 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     }
   }
 
+  function openChat() {
+    var panel = document.getElementById('chat-panel');
+    var fab = document.getElementById('chat-fab');
+    var dock = document.getElementById('chat-dock');
+    if (!panel.classList.contains('open')) {
+      panel.classList.add('open');
+      fab.classList.add('open');
+      fab.textContent = '\u2715';
+      dock.classList.add('hidden');
+      setTimeout(function() { document.getElementById('chat-input').focus(); }, 300);
+    }
+  }
+
+  function closeChat() {
+    var panel = document.getElementById('chat-panel');
+    var fab = document.getElementById('chat-fab');
+    var dock = document.getElementById('chat-dock');
+    panel.classList.remove('open');
+    fab.classList.remove('open');
+    fab.textContent = 'AI';
+    dock.classList.remove('hidden');
+  }
+
+  function toggleChat() {
+    var panel = document.getElementById('chat-panel');
+    if (panel.classList.contains('open')) {
+      closeChat();
+    } else {
+      openChat();
+    }
+  }
+
+  // Desktop FAB
   document.getElementById('chat-fab').addEventListener('click', toggleChat);
-  document.getElementById('chat-close').addEventListener('click', toggleChat);
+  document.getElementById('chat-close').addEventListener('click', closeChat);
+
+  // Mobile dock — tap input to open chat panel
+  document.getElementById('chat-dock-input').addEventListener('focus', function() {
+    this.blur();
+    openChat();
+  });
+
+  // Mobile dock — tap mic to open chat and start recording
+  document.getElementById('chat-dock-mic').addEventListener('click', function() {
+    openChat();
+    // Small delay to let panel open, then trigger mic
+    setTimeout(function() {
+      document.getElementById('chat-mic').click();
+    }, 350);
+  });
 
   function addChatMessage(role, content) {
     chatMessages.push({ role: role, content: content });
