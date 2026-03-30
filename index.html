@@ -108,11 +108,17 @@ header .date {
 }
 .backup-btn:hover { background: var(--surface-hover); color: var(--text); border-color: #00d4aa; }
 .backup-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.sync-btn-group {
+  display: flex;
+  gap: 0;
+}
+.sync-btn-group .sync-left { border-radius: 8px 0 0 8px; border-right: none; }
+.sync-btn-group .sync-right { border-radius: 0 8px 8px 0; }
 .sync-status {
   font-size: 0.75rem;
   color: var(--text-muted);
   align-self: center;
-  min-width: 20px;
+  min-width: 16px;
   text-align: center;
 }
 
@@ -741,9 +747,11 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   <h1>Command Center</h1>
   <div class="date" id="today-date"></div>
   <div class="backup-bar">
-    <button class="backup-btn" id="btn-pull" title="Pull from Gist">&#x21A7;</button>
     <span class="sync-status" id="sync-status"></span>
-    <button class="backup-btn" id="btn-push" title="Push to Gist">&#x21A5;</button>
+    <div class="sync-btn-group">
+      <button class="backup-btn sync-left" id="btn-pull" title="Pull from Gist">&#x21A7;</button>
+      <button class="backup-btn sync-right" id="btn-push" title="Push to Gist">&#x21A5;</button>
+    </div>
     <button class="backup-btn" id="btn-settings" title="Sync Settings">&#x2699;</button>
   </div>
 </header>
