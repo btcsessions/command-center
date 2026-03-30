@@ -3054,8 +3054,12 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         // Add to existing project?
         var parentTask = null;
         if (a.addToProject) {
+          var searchTerm = String(a.addToProject).toLowerCase();
           parentTask = tasks.find(function(t) {
-            return t.id === a.addToProject || (t.isProject && t.title.toLowerCase() === String(a.addToProject).toLowerCase());
+            if (t.id === a.addToProject) return true;
+            if (!t.isProject) return false;
+            var title = t.title.toLowerCase();
+            return title === searchTerm || title.includes(searchTerm) || searchTerm.includes(title);
           });
         }
         if (parentTask) {
@@ -3199,26 +3203,30 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         + '"Tomorrow", "next week", "in 3 days", etc. should also be resolved to exact dates.\n\n'
         + 'Available categories: ' + categories.map(function(c) { return c.id + ' (' + c.name + ')'; }).join(', ') + '.\n\n'
         + '=== CURRENT TASKS ===\n' + tasksSummary + '\n=== END TASKS ===\n\n'
-        + 'When you have actions ready, include a JSON block in this EXACT format:\n'
+        + 'CRITICAL: To make ANY changes to tasks, you MUST include a ```actions JSON block. Without it, nothing happens. '
+        + 'Do NOT just describe changes — always output the JSON block.\n\n'
+        + 'Format:\n'
         + '```actions\n'
         + '[\n'
-        + '  {"action":"add", "title":"New project", "category":"personal", "urgency":"medium", "isProject":true, "subtasks":[{"title":"Step 1"},{"title":"Step 2"}]},\n'
-        + '  {"action":"add", "title":"New subtask for existing project", "addToProject":"existing project id or title", "urgency":"medium"},\n'
-        + '  {"action":"update", "id":"task id or exact title", "title":"New title", "urgency":"high", "due":"2025-06-01", "notes":"some notes", "category":"work"},\n'
-        + '  {"action":"delete", "id":"task id or exact title"}\n'
+        + '  {"action":"add", "title":"New project name", "category":"personal", "urgency":"medium", "isProject":true, "subtasks":[{"title":"Step 1"},{"title":"Step 2"}]},\n'
+        + '  {"action":"add", "addToProject":"Existing Project Name", "subtasks":[{"title":"New subtask 1"},{"title":"New subtask 2"}]},\n'
+        + '  {"action":"update", "id":"task-id-or-title", "due":"2025-06-01", "notes":"added info"},\n'
+        + '  {"action":"delete", "id":"task-id-or-title"}\n'
         + ']\n'
         + '```\n\n'
         + 'Action types:\n'
-        + '- "add": Create a new task or project. Use "addToProject" to add a subtask to an existing project (match by id or title).\n'
-        + '- "update": Modify an existing task. Use "id" (task id or exact title) to target it. Include only fields to change: title, urgency, due, notes, category.\n'
-        + '- "delete": Remove a task by "id" (task id or exact title). Deleting a project removes all its subtasks too.\n\n'
+        + '- "add" with "isProject":true + "subtasks": Creates a NEW project with subtasks.\n'
+        + '- "add" with "addToProject": Adds subtasks to an EXISTING project. Match by project title (partial match OK) or id. Put new subtasks in the "subtasks" array.\n'
+        + '- "add" without addToProject or isProject: Creates a simple standalone task.\n'
+        + '- "update": Modifies existing task fields. Use "id" to target (task id or title). Only include fields to change.\n'
+        + '- "delete": Removes task by "id" (task id or title). Deleting a project removes its subtasks too.\n\n'
         + 'Rules:\n'
+        + '- ALWAYS output the ```actions block when making any changes — this is what actually modifies the tasks\n'
         + '- Any task with 2+ steps MUST be a project with subtasks\n'
         + '- Subtasks should be specific and actionable\n'
         + '- Set urgency to low, medium, high, or critical\n'
         + '- Pick the best matching category\n'
-        + '- Reference existing tasks by their id when updating/deleting\n'
-        + '- You can add subtasks to existing projects using addToProject\n'
+        + '- When user asks to add subtasks to an existing project, use "addToProject" with the project name\n'
         + '- Keep conversational responses concise\n'
         + '- Always suggest actions JSON when you have enough info';
 
@@ -3252,10 +3260,10 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       var result = await resp.json();
       var reply = result.content[0].text;
 
-      // Extract actions JSON if present (support both ```actions and ```tasks for backwards compat)
-      var actionMatch = reply.match(/```(?:actions|tasks)\s*\n([\s\S]*?)\n```/);
+      // Extract actions JSON if present (support ```actions, ```tasks, ```json, or bare ```)
+      var actionMatch = reply.match(/```(?:actions|tasks|json)?\s*\n(\[[\s\S]*?\])\s*\n```/);
       var parsedTasks = null;
-      var cleanReply = reply.replace(/```(?:actions|tasks)\s*\n[\s\S]*?\n```/g, '').trim();
+      var cleanReply = reply.replace(/```(?:actions|tasks|json)?\s*\n\[[\s\S]*?\]\s*\n```/g, '').trim();
 
       if (actionMatch) {
         try {
