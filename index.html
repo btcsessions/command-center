@@ -3386,13 +3386,15 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         + '- Sound natural, like a conversation. Not robotic or corporate.\n'
         + '- Never over-explain. Don\'t narrate what you\'re doing ("I\'ll create a project..." — just do it).\n'
         + '- When the user is clearly done describing something, just confirm briefly and include the actions.\n\n'
-        + 'BEFORE FINALIZING — ASK FIRST:\n'
-        + '- If urgency wasn\'t mentioned, ask: "How urgent is this?"\n'
-        + '- If there\'s no due date and it seems time-sensitive, ask: "When do you need this done?"\n'
-        + '- If the project is vague or could be broken down multiple ways, ask a clarifying question.\n'
-        + '- If you have everything you need, go ahead and create it — don\'t ask unnecessarily.\n'
-        + '- Keep clarifying questions to ONE question at a time. Don\'t stack multiple questions.\n\n'
-        + 'ACTIONS FORMAT — include ```actions block to make changes:\n'
+        + 'WORKFLOW — follow this order:\n'
+        + '1. User describes a task or project.\n'
+        + '2. You MUST ask about missing details ONE at a time before creating anything:\n'
+        + '   - Always ask about urgency if not specified: "How urgent — low, medium, high, or critical?"\n'
+        + '   - Always ask about due date: "When does this need to be done by?"\n'
+        + '   - Ask about anything else that\'s unclear or vague.\n'
+        + '3. Once you have urgency + due date + clear scope, THEN output the ```actions block.\n'
+        + '4. Never say you\'ve done something without including the ```actions block — that is the ONLY way changes happen.\n\n'
+        + 'ACTIONS FORMAT:\n'
         + '```actions\n'
         + '[{"action":"add","title":"Project","category":"cat","urgency":"medium","isProject":true,"subtasks":[{"title":"Step 1"}]},\n'
         + '{"action":"add","addToProject":"Existing Project","subtasks":[{"title":"New step"}]},\n'
@@ -3400,14 +3402,14 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         + '{"action":"delete","id":"task-id-or-title"}]\n'
         + '```\n\n'
         + 'RULES:\n'
-        + '- MUST include ```actions block for any changes — without it nothing happens\n'
+        + '- The ```actions block is the ONLY way to modify tasks. If your response doesn\'t include one, NOTHING changes. Never claim you\'ve added/updated/deleted without including it.\n'
         + '- 2+ steps = project with subtasks. Use addToProject for existing projects.\n'
         + '- Urgency: low/medium/high/critical. Pick best category.\n'
         + '- Subtasks must be specific and actionable, not vague.';
 
       var apiMessages = chatMessages
         .filter(function(m) { return m.role === 'user' || m.role === 'assistant'; })
-        .map(function(m) { return { role: m.role, content: m.content }; });
+        .map(function(m) { return { role: m.role, content: m.fullReply || m.content }; });
 
       var resp = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -3463,7 +3465,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         }
       }
 
-      var msg = { role: 'assistant', content: cleanReply };
+      var msg = { role: 'assistant', content: cleanReply, fullReply: reply };
       if (parsedTasks) {
         msg.tasks = parsedTasks;
         msg.applied = true;
