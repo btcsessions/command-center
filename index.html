@@ -456,6 +456,32 @@ header .date {
 }
 .task-edit-btn:hover { background: var(--surface-hover); color: var(--text); }
 
+/* Task expand/collapse */
+.task-item { cursor: pointer; }
+.task-item .task-details {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.task-item.task-expanded .task-details {
+  display: flex;
+}
+.task-item .task-expand-indicator {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+  margin-left: auto;
+  opacity: 0.5;
+}
+.task-item.task-expanded .task-expand-indicator {
+  transform: rotate(90deg);
+}
+.task-wrapper.task-detail-expanded .task-notes-wrap {
+  max-height: 500px;
+}
+
 .add-task-btn {
   display: block;
   width: calc(100% - 16px);
@@ -1394,6 +1420,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   let expandedCategories = new Set();
   let expandedNotes = new Set();
   let expandedProjects = new Set();
+  let expandedTasks = new Set();
   let editingTaskId = null;
   let modalParentId = null;
   let lastDateStr = '';
@@ -1920,7 +1947,8 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   function renderTaskItem(task, isFirst, isSubtask) {
     var todayStr = getTodayStr();
     var wrapper = document.createElement('div');
-    wrapper.className = 'task-wrapper' + (isSubtask ? ' subtask-item' : '');
+    var isTaskExpanded = !task.isProject && expandedTasks.has(task.id);
+    wrapper.className = 'task-wrapper' + (isSubtask ? ' subtask-item' : '') + (isTaskExpanded ? ' task-detail-expanded' : '');
     wrapper.dataset.id = task.id;
     if (task.isProject) {
       wrapper.dataset.expanded = expandedProjects.has(task.id) ? 'true' : 'false';
@@ -2012,24 +2040,24 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       editBtn.textContent = '\u270E';
       li.appendChild(editBtn);
     } else if (isSubtask) {
-      // Subtask: two-row layout (title on top, meta below)
-      var contentCol = document.createElement('div');
-      contentCol.className = 'subtask-content';
+      // Subtask: expandable layout
+      var isTaskExpanded = expandedTasks.has(task.id);
+      if (isTaskExpanded) li.classList.add('task-expanded');
 
       var title = document.createElement('span');
       title.className = 'task-title';
       title.textContent = task.title;
-      contentCol.appendChild(title);
+      li.appendChild(title);
 
-      var metaRow = document.createElement('div');
-      metaRow.className = 'subtask-meta-row';
+      var details = document.createElement('span');
+      details.className = 'task-details';
 
       var label = getRecurrenceLabel(task);
       if (label) {
         var badge = document.createElement('span');
         badge.className = 'recurrence-badge';
         badge.textContent = label;
-        metaRow.appendChild(badge);
+        details.appendChild(badge);
       }
 
       var effectiveDue = getEffectiveDueDate(task);
@@ -2039,7 +2067,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         dueBadge.className = 'due-badge ' + dueInfo.cls;
         dueBadge.textContent = dueInfo.text;
         if (!task.dueDate && effectiveDue) dueBadge.style.opacity = '0.6';
-        metaRow.appendChild(dueBadge);
+        details.appendChild(dueBadge);
       }
 
       if (task.notes) {
@@ -2048,30 +2076,41 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         notesBtn.setAttribute('aria-label', 'Toggle notes');
         notesBtn.textContent = '\uD83D\uDCDD';
         notesBtn.dataset.id = task.id;
-        metaRow.appendChild(notesBtn);
+        details.appendChild(notesBtn);
       }
-
-      if (metaRow.children.length > 0) contentCol.appendChild(metaRow);
-      li.appendChild(contentCol);
 
       var editBtn = document.createElement('button');
       editBtn.className = 'task-edit-btn';
       editBtn.setAttribute('aria-label', 'Edit task');
       editBtn.textContent = '\u270E';
-      li.appendChild(editBtn);
+      details.appendChild(editBtn);
+
+      li.appendChild(details);
+
+      var expandArrow = document.createElement('span');
+      expandArrow.className = 'task-expand-indicator';
+      expandArrow.textContent = '\u25B6';
+      li.appendChild(expandArrow);
     } else {
-      // Regular top-level task: single-row layout
+      // Regular top-level task: expandable layout
+      var isTaskExpanded = expandedTasks.has(task.id);
+      if (isTaskExpanded) li.classList.add('task-expanded');
+
       var title = document.createElement('span');
       title.className = 'task-title';
       title.textContent = task.title;
       li.appendChild(title);
+
+      // Details container (hidden when collapsed)
+      var details = document.createElement('span');
+      details.className = 'task-details';
 
       var label = getRecurrenceLabel(task);
       if (label) {
         var badge = document.createElement('span');
         badge.className = 'recurrence-badge';
         badge.textContent = label;
-        li.appendChild(badge);
+        details.appendChild(badge);
       }
 
       var dueInfo = formatDueDate(task.dueDate, todayStr);
@@ -2079,7 +2118,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         var dueBadge = document.createElement('span');
         dueBadge.className = 'due-badge ' + dueInfo.cls;
         dueBadge.textContent = dueInfo.text;
-        li.appendChild(dueBadge);
+        details.appendChild(dueBadge);
       }
 
       if (task.notes) {
@@ -2088,14 +2127,22 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         notesBtn.setAttribute('aria-label', 'Toggle notes');
         notesBtn.textContent = '\uD83D\uDCDD';
         notesBtn.dataset.id = task.id;
-        li.appendChild(notesBtn);
+        details.appendChild(notesBtn);
       }
 
       var editBtn = document.createElement('button');
       editBtn.className = 'task-edit-btn';
       editBtn.setAttribute('aria-label', 'Edit task');
       editBtn.textContent = '\u270E';
-      li.appendChild(editBtn);
+      details.appendChild(editBtn);
+
+      li.appendChild(details);
+
+      // Expand indicator arrow
+      var expandArrow = document.createElement('span');
+      expandArrow.className = 'task-expand-indicator';
+      expandArrow.textContent = '\u25B6';
+      li.appendChild(expandArrow);
     }
 
     wrapper.appendChild(li);
@@ -2845,6 +2892,25 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       var project = tasks.find(function(t) { return t.id === projectId; });
       if (project) openModal('add', null, project.category, projectId);
       return;
+    }
+
+    // Task expand/collapse (catch-all for clicks on task-item not handled above)
+    var taskItem = e.target.closest('.task-item');
+    if (taskItem) {
+      var taskWrapper = taskItem.closest('.task-wrapper');
+      if (taskWrapper) {
+        var tid = taskWrapper.dataset.id;
+        var t = tasks.find(function(x) { return x.id === tid; });
+        if (t && !t.isProject) {
+          if (expandedTasks.has(tid)) {
+            expandedTasks.delete(tid);
+          } else {
+            expandedTasks.add(tid);
+          }
+          render();
+          return;
+        }
+      }
     }
 
     // Add category
