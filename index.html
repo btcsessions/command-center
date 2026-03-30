@@ -2949,6 +2949,15 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
           var li = document.createElement('li');
           li.textContent = (t.isProject ? '\uD83D\uDCC1 ' : '\u2022 ') + t.title;
           taskList.appendChild(li);
+          if (t.subtasks && t.subtasks.length > 0) {
+            t.subtasks.forEach(function(st) {
+              var subLi = document.createElement('li');
+              subLi.style.paddingLeft = '16px';
+              subLi.style.color = 'var(--text-muted)';
+              subLi.textContent = '\u2514 ' + (st.title || st);
+              taskList.appendChild(subLi);
+            });
+          }
         });
         div.appendChild(taskList);
 
@@ -3049,13 +3058,36 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 
     try {
       var systemPrompt = 'You are a project planning assistant for a task management app called Command Center. '
-        + 'The user will describe projects or tasks. Help them break these into actionable tasks. '
-        + 'Available categories: ' + categories.map(function(c) { return c.id + ' (' + c.name + ')'; }).join(', ') + '. '
-        + 'When you have a clear set of tasks to suggest, include a JSON block in your response like this:\n'
-        + '```tasks\n[{"title":"Task name","category":"category_id","urgency":"low|medium|high|critical",'
-        + '"isProject":false,"subtasks":[{"title":"Subtask name"}]}]\n```\n'
-        + 'Keep your conversational responses concise. Ask clarifying questions if the project is vague. '
-        + 'Use isProject:true with subtasks for multi-step items. Set appropriate urgency levels.';
+        + 'Help users break projects into actionable tasks and subtasks.\n\n'
+        + 'Available categories: ' + categories.map(function(c) { return c.id + ' (' + c.name + ')'; }).join(', ') + '.\n\n'
+        + 'IMPORTANT: When the user describes a project with multiple steps, ALWAYS create a project with subtasks. '
+        + 'A project has "isProject":true and a "subtasks" array. Each subtask is a concrete action item.\n\n'
+        + 'When you have tasks ready, you MUST include this exact JSON format in your response:\n'
+        + '```tasks\n'
+        + '[\n'
+        + '  {\n'
+        + '    "title": "Build garden shed",\n'
+        + '    "category": "personal",\n'
+        + '    "urgency": "medium",\n'
+        + '    "isProject": true,\n'
+        + '    "subtasks": [\n'
+        + '      {"title": "Buy lumber and materials"},\n'
+        + '      {"title": "Pour concrete foundation"},\n'
+        + '      {"title": "Frame the walls"},\n'
+        + '      {"title": "Install roof and siding"}\n'
+        + '    ]\n'
+        + '  },\n'
+        + '  {"title": "Simple standalone task", "category": "work", "urgency": "low", "isProject": false}\n'
+        + ']\n'
+        + '```\n\n'
+        + 'Rules:\n'
+        + '- Any task with 2+ steps MUST be a project with subtasks\n'
+        + '- Subtasks should be specific and actionable, not vague\n'
+        + '- Set urgency to low, medium, high, or critical\n'
+        + '- Pick the best matching category for each task\n'
+        + '- Ask clarifying questions if the project is too vague to break down\n'
+        + '- Keep conversational responses concise\n'
+        + '- Always suggest the tasks JSON when you have enough info — don\'t wait to be asked';
 
       var apiMessages = chatMessages
         .filter(function(m) { return m.role === 'user' || m.role === 'assistant'; })
@@ -3071,7 +3103,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
-          max_tokens: 1024,
+          max_tokens: 2048,
           system: systemPrompt,
           messages: apiMessages
         })
