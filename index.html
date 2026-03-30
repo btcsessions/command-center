@@ -1517,20 +1517,6 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     return tasks
       .filter(function(t) { return t.category === category && !t.parentId && isTaskVisible(t, todayStr); })
       .sort(function(a, b) {
-        // 1. Soonest due date first (tasks with due dates before those without)
-        var aDue = a.dueDate || '';
-        var bDue = b.dueDate || '';
-        if (aDue || bDue) {
-          if (aDue && !bDue) return -1;
-          if (!aDue && bDue) return 1;
-          if (aDue < bDue) return -1;
-          if (aDue > bDue) return 1;
-        }
-        // 2. Same due date (or both none): highest urgency first
-        var ua = getUrgencyWeight(a, todayStr);
-        var ub = getUrgencyWeight(b, todayStr);
-        if (ua !== ub) return ua - ub;
-        // 3. Manual sort order as final tiebreaker
         return a.sortOrder - b.sortOrder;
       });
   }
@@ -1779,7 +1765,14 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       section.style.setProperty('--cat-color', cat.color);
 
       const visible = getVisibleTasks(cat.id);
-      const nextTask = visible[0] || null;
+      // Find first task with an actionable next item (skip projects with no subtasks)
+      var nextTask = null;
+      for (var vi = 0; vi < visible.length; vi++) {
+        var candidate = visible[vi];
+        if (!candidate.isProject) { nextTask = candidate; break; }
+        var subs = getVisibleSubtasks(candidate.id);
+        if (subs.length > 0) { nextTask = candidate; break; }
+      }
 
       // Header
       const header = document.createElement('div');
@@ -2462,6 +2455,8 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     var app = document.getElementById('app');
 
     app.addEventListener('dragstart', function(e) {
+      // Only allow drag from the drag handle so clicks elsewhere (e.g. project row) still fire
+      if (!e.target.closest('.drag-handle')) { e.preventDefault(); return; }
       var li = e.target.closest('.task-item');
       if (!li) return;
       draggedId = li.dataset.id;
