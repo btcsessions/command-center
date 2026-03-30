@@ -2610,6 +2610,22 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   function setGistId(id) { localStorage.setItem(GIST_ID_KEY, id); }
   function clearGistId() { localStorage.removeItem(GIST_ID_KEY); }
 
+  async function discoverGist(token) {
+    try {
+      var resp = await fetch('https://api.github.com/gists?per_page=100', {
+        headers: { 'Authorization': 'token ' + token }
+      });
+      if (!resp.ok) return null;
+      var gists = await resp.json();
+      for (var i = 0; i < gists.length; i++) {
+        if (gists[i].files && gists[i].files[GIST_FILENAME]) {
+          return gists[i].id;
+        }
+      }
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+
   function setSyncStatus(text, temp) {
     var el = document.getElementById('sync-status');
     el.textContent = text;
@@ -2740,11 +2756,22 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     document.body.style.overflow = '';
   });
 
-  document.getElementById('settings-save').addEventListener('click', function() {
+  document.getElementById('settings-save').addEventListener('click', async function() {
     var token = document.getElementById('settings-token').value.trim();
     setToken(token);
     document.getElementById('settings-modal-overlay').classList.remove('open');
     document.body.style.overflow = '';
+    // Auto-discover existing Gist if none linked
+    if (token && !getGistId()) {
+      setSyncStatus('\u2026');
+      var found = await discoverGist(token);
+      if (found) {
+        setGistId(found);
+        setSyncStatus('\u2713', true);
+      } else {
+        setSyncStatus('', false);
+      }
+    }
   });
 
   document.getElementById('settings-unlink').addEventListener('click', function() {
