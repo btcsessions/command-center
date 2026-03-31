@@ -1924,7 +1924,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     const li = document.createElement('div');
     li.className = 'task-item' + (isFirst ? ' first-task' : '');
     li.dataset.id = task.id;
-    li.setAttribute('draggable', 'true');
+    li.setAttribute('draggable', 'false');
 
     const handle = document.createElement('span');
     handle.className = 'drag-handle';
@@ -2454,14 +2454,19 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   (function() {
     var app = document.getElementById('app');
 
-    // Track mousedown target so dragstart can check if drag started from handle
+    // Track mousedown target so dragstart can check if drag started from handle.
+    // Also toggle draggable: only enable when mousedown is on the drag handle,
+    // so clicks elsewhere (e.g. project title) still fire click events normally.
     var lastMousedownTarget = null;
     app.addEventListener('mousedown', function(e) {
       lastMousedownTarget = e.target;
+      var item = e.target.closest('.task-item');
+      if (item) {
+        item.setAttribute('draggable', !!e.target.closest('.drag-handle'));
+      }
     }, true);
 
     app.addEventListener('dragstart', function(e) {
-      // Only allow drag from the drag handle so clicks elsewhere (e.g. project row) still fire
       if (!lastMousedownTarget || !lastMousedownTarget.closest('.drag-handle')) { e.preventDefault(); return; }
       var li = e.target.closest('.task-item');
       if (!li) return;
