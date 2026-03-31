@@ -763,6 +763,8 @@ header .date {
   border-bottom: 1px solid rgba(0, 212, 170, 0.2);
   flex-shrink: 0;
   background: rgba(0, 212, 170, 0.03);
+  cursor: pointer;
+  touch-action: manipulation;
 }
 .chat-header-title {
   font-family: 'Orbitron', monospace;
@@ -3079,6 +3081,11 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   // Desktop FAB
   document.getElementById('chat-fab').addEventListener('click', toggleChat);
   document.getElementById('chat-close').addEventListener('click', closeChat);
+  // Click anywhere on the header bar (title area) to close the panel
+  document.querySelector('.chat-header').addEventListener('click', function(e) {
+    if (e.target.closest('#chat-tts-toggle')) return; // don't close when toggling TTS
+    closeChat();
+  });
 
   // Mobile dock — tap input to open chat panel
   document.getElementById('chat-dock-input').addEventListener('focus', function() {
