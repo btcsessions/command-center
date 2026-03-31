@@ -2454,9 +2454,15 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   (function() {
     var app = document.getElementById('app');
 
+    // Track mousedown target so dragstart can check if drag started from handle
+    var lastMousedownTarget = null;
+    app.addEventListener('mousedown', function(e) {
+      lastMousedownTarget = e.target;
+    }, true);
+
     app.addEventListener('dragstart', function(e) {
       // Only allow drag from the drag handle so clicks elsewhere (e.g. project row) still fire
-      if (!e.target.closest('.drag-handle')) { e.preventDefault(); return; }
+      if (!lastMousedownTarget || !lastMousedownTarget.closest('.drag-handle')) { e.preventDefault(); return; }
       var li = e.target.closest('.task-item');
       if (!li) return;
       draggedId = li.dataset.id;
