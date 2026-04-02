@@ -101,6 +101,27 @@ body {
 .next-action-bar .due-badge {
   flex-shrink: 0;
 }
+.next-action-bar-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.next-action-bar-arrow {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-muted); font-size: 0.85rem;
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+  touch-action: manipulation;
+}
+.next-action-bar-arrow:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+.next-action-bar-arrow:disabled { opacity: 0.25; cursor: default; }
+.next-action-bar-arrow:disabled:hover { background: none; color: var(--text-muted); }
+.next-action-bar-pos {
+  font-size: 0.65rem; color: var(--text-muted); min-width: 20px; text-align: center;
+}
 
 /* Pull to refresh */
 .pull-refresh {
@@ -1624,30 +1645,36 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       .sort(function(a, b) { return a.sortOrder - b.sortOrder; });
   }
 
-  // Find the single most urgent actionable task, prioritising Work category.
-  // Returns { task, parentProject } or null.
-  function getTopAction() {
+  // Rank all actionable tasks by priority. Work category preferred, overdue work items top.
+  // Returns sorted array of { task, parentProject }.
+  function getRankedActions() {
     var todayStr = getTodayStr();
-    // Collect all actionable (non-project) visible tasks
     var candidates = tasks.filter(function(t) {
       return !t.isProject && isTaskVisible(t, todayStr);
     });
-    if (candidates.length === 0) return null;
+    if (candidates.length === 0) return [];
 
-    // Find the work category id (may have been renamed)
     var workCat = categories.find(function(c) { return c.id === 'work'; });
     var workId = workCat ? workCat.id : null;
 
     candidates.sort(function(a, b) {
-      // 1. Work tasks first
+      // 1. Overdue work items first
+      var aOverdueWork = (a.category === workId && a.dueDate && a.dueDate <= todayStr) ? 0 : 1;
+      var bOverdueWork = (b.category === workId && b.dueDate && b.dueDate <= todayStr) ? 0 : 1;
+      if (aOverdueWork !== bOverdueWork) return aOverdueWork - bOverdueWork;
+      // 2. Work tasks before others
       var aWork = a.category === workId ? 0 : 1;
       var bWork = b.category === workId ? 0 : 1;
       if (aWork !== bWork) return aWork - bWork;
-      // 2. Highest urgency (lowest weight)
+      // 3. Overdue items before non-overdue
+      var aOverdue = (a.dueDate && a.dueDate <= todayStr) ? 0 : 1;
+      var bOverdue = (b.dueDate && b.dueDate <= todayStr) ? 0 : 1;
+      if (aOverdue !== bOverdue) return aOverdue - bOverdue;
+      // 4. Highest urgency
       var ua = getUrgencyWeight(a, todayStr);
       var ub = getUrgencyWeight(b, todayStr);
       if (ua !== ub) return ua - ub;
-      // 3. Soonest due date
+      // 5. Soonest due date
       var aDue = a.dueDate || '';
       var bDue = b.dueDate || '';
       if (aDue || bDue) {
@@ -1656,17 +1683,20 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         if (aDue < bDue) return -1;
         if (aDue > bDue) return 1;
       }
-      // 4. Manual sort order
+      // 6. Manual sort order
       return a.sortOrder - b.sortOrder;
     });
 
-    var top = candidates[0];
-    var parentProject = null;
-    if (top.parentId) {
-      parentProject = tasks.find(function(t) { return t.id === top.parentId; }) || null;
-    }
-    return { task: top, parentProject: parentProject };
+    return candidates.map(function(t) {
+      var parentProject = null;
+      if (t.parentId) {
+        parentProject = tasks.find(function(p) { return p.id === t.parentId; }) || null;
+      }
+      return { task: t, parentProject: parentProject };
+    });
   }
+
+  var nextActionIndex = 0;
 
   function nextSortOrder(category) {
     const catTasks = tasks.filter(function(t) { return t.category === category; });
@@ -1859,9 +1889,12 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     var bar = document.getElementById('next-action-bar');
     bar.textContent = '';
     bar.classList.remove('visible');
-    var topAction = getTopAction();
-    if (topAction) {
-      var t = topAction.task;
+    var ranked = getRankedActions();
+    if (nextActionIndex >= ranked.length) nextActionIndex = 0;
+    if (ranked.length > 0) {
+      var current = ranked[nextActionIndex];
+      var t = current.task;
+
       var barLabel = document.createElement('span');
       barLabel.className = 'next-action-bar-label';
       barLabel.textContent = 'Next';
@@ -1878,10 +1911,10 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       barCheck.setAttribute('aria-label', 'Complete ' + t.title);
       bar.appendChild(barCheck);
 
-      if (topAction.parentProject) {
+      if (current.parentProject) {
         var barProj = document.createElement('span');
         barProj.className = 'next-action-bar-project';
-        barProj.textContent = topAction.parentProject.title + ':';
+        barProj.textContent = current.parentProject.title + ':';
         bar.appendChild(barProj);
       }
 
@@ -1904,6 +1937,35 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         barCat.className = 'next-action-bar-cat';
         barCat.textContent = cat.icon;
         bar.appendChild(barCat);
+      }
+
+      // Navigation arrows
+      if (ranked.length > 1) {
+        var nav = document.createElement('span');
+        nav.className = 'next-action-bar-nav';
+
+        var prevBtn = document.createElement('button');
+        prevBtn.className = 'next-action-bar-arrow';
+        prevBtn.setAttribute('aria-label', 'Previous task');
+        prevBtn.textContent = '\u25C0';
+        prevBtn.dataset.dir = 'prev';
+        if (nextActionIndex === 0) prevBtn.disabled = true;
+        nav.appendChild(prevBtn);
+
+        var pos = document.createElement('span');
+        pos.className = 'next-action-bar-pos';
+        pos.textContent = (nextActionIndex + 1) + '/' + ranked.length;
+        nav.appendChild(pos);
+
+        var nextBtn = document.createElement('button');
+        nextBtn.className = 'next-action-bar-arrow';
+        nextBtn.setAttribute('aria-label', 'Next task');
+        nextBtn.textContent = '\u25B6';
+        nextBtn.dataset.dir = 'next';
+        if (nextActionIndex === ranked.length - 1) nextBtn.disabled = true;
+        nav.appendChild(nextBtn);
+
+        bar.appendChild(nav);
       }
 
       bar.classList.add('visible');
@@ -2924,8 +2986,19 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       var taskId = check.dataset.id;
       if (taskId) {
         completeTask(taskId);
+        nextActionIndex = 0;
         render();
       }
+      return;
+    }
+    var arrow = e.target.closest('.next-action-bar-arrow');
+    if (arrow && !arrow.disabled) {
+      if (arrow.dataset.dir === 'prev' && nextActionIndex > 0) {
+        nextActionIndex--;
+      } else if (arrow.dataset.dir === 'next') {
+        nextActionIndex++;
+      }
+      render();
       return;
     }
   });
