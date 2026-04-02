@@ -1658,18 +1658,18 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     var workId = workCat ? workCat.id : null;
 
     candidates.sort(function(a, b) {
-      // 1. Overdue work items first
-      var aOverdueWork = (a.category === workId && a.dueDate && a.dueDate <= todayStr) ? 0 : 1;
-      var bOverdueWork = (b.category === workId && b.dueDate && b.dueDate <= todayStr) ? 0 : 1;
+      // 1. Overdue work items first (strictly past due, not due today)
+      var aOverdueWork = (a.category === workId && a.dueDate && a.dueDate < todayStr) ? 0 : 1;
+      var bOverdueWork = (b.category === workId && b.dueDate && b.dueDate < todayStr) ? 0 : 1;
       if (aOverdueWork !== bOverdueWork) return aOverdueWork - bOverdueWork;
-      // 2. Work tasks before others
+      // 2. Any overdue items (non-work) before non-overdue
+      var aOverdue = (a.dueDate && a.dueDate < todayStr) ? 0 : 1;
+      var bOverdue = (b.dueDate && b.dueDate < todayStr) ? 0 : 1;
+      if (aOverdue !== bOverdue) return aOverdue - bOverdue;
+      // 3. Work tasks before others
       var aWork = a.category === workId ? 0 : 1;
       var bWork = b.category === workId ? 0 : 1;
       if (aWork !== bWork) return aWork - bWork;
-      // 3. Overdue items before non-overdue
-      var aOverdue = (a.dueDate && a.dueDate <= todayStr) ? 0 : 1;
-      var bOverdue = (b.dueDate && b.dueDate <= todayStr) ? 0 : 1;
-      if (aOverdue !== bOverdue) return aOverdue - bOverdue;
       // 4. Highest urgency
       var ua = getUrgencyWeight(a, todayStr);
       var ub = getUrgencyWeight(b, todayStr);
