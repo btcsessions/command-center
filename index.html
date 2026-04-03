@@ -4006,6 +4006,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       runMigrations(imported, fromVersion);
     }
     tasks = imported;
+    pruneOldData();
     saveTasks();
     if (Array.isArray(data.categories) && data.categories.length > 0) {
       categories = data.categories;
