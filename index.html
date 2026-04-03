@@ -438,33 +438,32 @@ header .date {
 .task-item.dragging {
   opacity: 0.3;
 }
-/* Drop insertion line — shows clearly where the task will land */
-.task-wrapper.drag-over-top,
-.task-wrapper.drag-over-bottom {
-  position: relative;
-}
-.task-wrapper.drag-over-top::before,
-.task-wrapper.drag-over-bottom::after {
-  content: '';
+/* Drop insertion line — a standalone element positioned between tasks */
+.drop-indicator {
   position: absolute;
   left: 8px;
   right: 8px;
   height: 3px;
-  background: var(--cat-color);
+  background: var(--cat-color, #00d4aa);
   border-radius: 2px;
-  z-index: 10;
-  box-shadow: 0 0 8px var(--cat-color);
+  z-index: 50;
+  pointer-events: none;
+  box-shadow: 0 0 8px var(--cat-color, #00d4aa);
+  transition: top 0.08s ease;
 }
-.task-wrapper.drag-over-top::before { top: -2px; }
-.task-wrapper.drag-over-bottom::after { bottom: -2px; }
-/* Circle endpoint on the insertion line */
-.task-wrapper.drag-over-top::before,
-.task-wrapper.drag-over-bottom::after {
+.drop-indicator::before {
   content: '';
+  position: absolute;
+  left: -4px;
+  top: -4px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--cat-color, #00d4aa);
+  box-shadow: 0 0 6px var(--cat-color, #00d4aa);
 }
 .task-item.drag-over-top,
 .task-item.drag-over-bottom {
-  /* Keep for legacy/fallback but no longer primary indicator */
   box-shadow: none;
 }
 /* Drop zone highlights for cross-container drops */
@@ -2558,10 +2557,52 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   let draggedId = null;
   let catDragActive = false;
 
+  var dropIndicator = null;
+
   function clearAllDropIndicators() {
     document.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(function(el) {
       el.classList.remove('drag-over-top', 'drag-over-bottom');
     });
+    if (dropIndicator && dropIndicator.parentNode) {
+      dropIndicator.parentNode.removeChild(dropIndicator);
+    }
+    dropIndicator = null;
+  }
+
+  // Show a bold line between tasks at the exact insertion point.
+  // targetItem = the .task-item being hovered, insertBefore = above or below it
+  function showDropIndicatorLine(targetItem, insertBefore) {
+    var listEl = targetItem.closest('.task-list');
+    if (!listEl) return;
+    var wrapper = targetItem.closest('.task-wrapper');
+    if (!wrapper) return;
+
+    if (!dropIndicator) {
+      dropIndicator = document.createElement('div');
+      dropIndicator.className = 'drop-indicator';
+    }
+
+    // Position relative to the task-list container
+    if (dropIndicator.parentNode !== listEl) {
+      listEl.style.position = 'relative';
+      listEl.appendChild(dropIndicator);
+    }
+
+    var listRect = listEl.getBoundingClientRect();
+    var wrapperRect = wrapper.getBoundingClientRect();
+    var y;
+    if (insertBefore) {
+      y = wrapperRect.top - listRect.top - 1;
+    } else {
+      y = wrapperRect.bottom - listRect.top - 1;
+    }
+    dropIndicator.style.top = y + 'px';
+
+    // Pick up the category color
+    var cat = listEl.closest('.category');
+    if (cat) {
+      dropIndicator.style.setProperty('--cat-color', getComputedStyle(cat).getPropertyValue('--cat-color'));
+    }
   }
 
   function getListContext(listEl) {
@@ -2730,12 +2771,11 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       clearAllDropIndicators();
       var target = e.target.closest('.task-item');
       if (target && target.dataset.id !== draggedId) {
-        var wrapper = target.closest('.task-wrapper');
         var rect = target.getBoundingClientRect();
         var mid = rect.top + rect.height / 2;
-        var cls = e.clientY < mid ? 'drag-over-top' : 'drag-over-bottom';
-        target.classList.add(cls);
-        if (wrapper) wrapper.classList.add(cls);
+        var above = e.clientY < mid;
+        target.classList.add(above ? 'drag-over-top' : 'drag-over-bottom');
+        showDropIndicatorLine(target, above);
       } else {
         showDropZoneIndicator(e.target);
       }
@@ -2812,12 +2852,11 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       if (el) {
         var target = el.closest('.task-item');
         if (target && target.dataset.id !== touchId) {
-          var wrapper = target.closest('.task-wrapper');
           var rect = target.getBoundingClientRect();
           var mid = rect.top + rect.height / 2;
-          var cls = touch.clientY < mid ? 'drag-over-top' : 'drag-over-bottom';
-          target.classList.add(cls);
-          if (wrapper) wrapper.classList.add(cls);
+          var above = touch.clientY < mid;
+          target.classList.add(above ? 'drag-over-top' : 'drag-over-bottom');
+          showDropIndicatorLine(target, above);
         } else {
           showDropZoneIndicator(el);
         }
