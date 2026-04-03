@@ -438,11 +438,34 @@ header .date {
 .task-item.dragging {
   opacity: 0.3;
 }
-.task-item.drag-over-top {
-  box-shadow: 0 -2px 0 0 var(--cat-color) inset;
+/* Drop insertion line — shows clearly where the task will land */
+.task-wrapper.drag-over-top,
+.task-wrapper.drag-over-bottom {
+  position: relative;
 }
+.task-wrapper.drag-over-top::before,
+.task-wrapper.drag-over-bottom::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 3px;
+  background: var(--cat-color);
+  border-radius: 2px;
+  z-index: 10;
+  box-shadow: 0 0 8px var(--cat-color);
+}
+.task-wrapper.drag-over-top::before { top: -2px; }
+.task-wrapper.drag-over-bottom::after { bottom: -2px; }
+/* Circle endpoint on the insertion line */
+.task-wrapper.drag-over-top::before,
+.task-wrapper.drag-over-bottom::after {
+  content: '';
+}
+.task-item.drag-over-top,
 .task-item.drag-over-bottom {
-  box-shadow: 0 2px 0 0 var(--cat-color) inset;
+  /* Keep for legacy/fallback but no longer primary indicator */
+  box-shadow: none;
 }
 /* Drop zone highlights for cross-container drops */
 .category-header.drag-over-bottom {
@@ -2707,9 +2730,12 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       clearAllDropIndicators();
       var target = e.target.closest('.task-item');
       if (target && target.dataset.id !== draggedId) {
+        var wrapper = target.closest('.task-wrapper');
         var rect = target.getBoundingClientRect();
         var mid = rect.top + rect.height / 2;
-        target.classList.add(e.clientY < mid ? 'drag-over-top' : 'drag-over-bottom');
+        var cls = e.clientY < mid ? 'drag-over-top' : 'drag-over-bottom';
+        target.classList.add(cls);
+        if (wrapper) wrapper.classList.add(cls);
       } else {
         showDropZoneIndicator(e.target);
       }
@@ -2718,7 +2744,11 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     app.addEventListener('dragleave', function(e) {
       if (catDragActive) return;
       var target = e.target.closest('.task-item');
-      if (target) target.classList.remove('drag-over-top', 'drag-over-bottom');
+      if (target) {
+        target.classList.remove('drag-over-top', 'drag-over-bottom');
+        var wrapper = target.closest('.task-wrapper');
+        if (wrapper) wrapper.classList.remove('drag-over-top', 'drag-over-bottom');
+      }
     });
 
     app.addEventListener('drop', function(e) {
@@ -2782,9 +2812,12 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       if (el) {
         var target = el.closest('.task-item');
         if (target && target.dataset.id !== touchId) {
+          var wrapper = target.closest('.task-wrapper');
           var rect = target.getBoundingClientRect();
           var mid = rect.top + rect.height / 2;
-          target.classList.add(touch.clientY < mid ? 'drag-over-top' : 'drag-over-bottom');
+          var cls = touch.clientY < mid ? 'drag-over-top' : 'drag-over-bottom';
+          target.classList.add(cls);
+          if (wrapper) wrapper.classList.add(cls);
         } else {
           showDropZoneIndicator(el);
         }
