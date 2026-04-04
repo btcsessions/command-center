@@ -1259,7 +1259,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     <span class="sync-status" id="sync-status"></span>
     <div class="sync-btn-group">
       <button class="backup-btn sync-left" id="btn-pull" title="Pull from Gist">&#x21A7;</button>
-      <button class="backup-btn sync-right" id="btn-push" title="Push to all">&#x21A5;</button>
+      <button class="backup-btn sync-right" id="btn-push" title="Push to Gist">&#x21A5;</button>
     </div>
     <button class="backup-btn" id="btn-settings" title="Sync Settings">&#x2699;</button>
   </div>
@@ -1369,51 +1369,16 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   <div class="modal-content">
     <h2 class="modal-title">Settings</h2>
     <div class="form-group">
-      <label for="settings-sync-provider">Pull from</label>
-      <select id="settings-sync-provider" class="form-input" style="appearance:auto;-webkit-appearance:menulist;padding:10px 12px;">
-        <option value="gist">GitHub Gist</option>
-        <option value="gitea">Gitea</option>
-      </select>
+      <label for="settings-token">GitHub Token (for sync)</label>
+      <input type="password" id="settings-token" class="form-input" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off">
       <p style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">
-        Push always syncs to <strong>both</strong> providers (if configured). Pull uses the selected source.
+        Create at GitHub &rarr; Settings &rarr; Developer settings &rarr; Personal access tokens. Only the <strong>gist</strong> scope is needed.
       </p>
     </div>
-    <div id="settings-gist-section">
-      <div class="form-group">
-        <label for="settings-token">GitHub Token</label>
-        <input type="password" id="settings-token" class="form-input" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off">
-        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">
-          Create at GitHub &rarr; Settings &rarr; Developer settings &rarr; Personal access tokens. Only the <strong>gist</strong> scope is needed.
-        </p>
-      </div>
-      <div class="form-group" id="settings-gist-info" style="display:none;">
-        <label>Linked Gist</label>
-        <p style="font-size:0.85rem;color:var(--text-muted);" id="settings-gist-id-display"></p>
-        <button type="button" class="btn btn-secondary" id="settings-unlink" style="margin-top:6px;font-size:0.8rem;">Unlink Gist</button>
-      </div>
-    </div>
-    <div id="settings-gitea-section">
-      <div class="form-group">
-        <label for="settings-gitea-url">Gitea URL</label>
-        <input type="url" id="settings-gitea-url" class="form-input" placeholder="https://gitea.example.com" autocomplete="off">
-        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">
-          Your self-hosted Gitea instance URL (e.g. <strong>https://gitea.yourdomain.com</strong>).
-        </p>
-      </div>
-      <div class="form-group">
-        <label for="settings-gitea-token">Gitea Token</label>
-        <input type="password" id="settings-gitea-token" class="form-input" placeholder="your-gitea-token" autocomplete="off">
-        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">
-          Create at Gitea &rarr; Settings &rarr; Applications &rarr; Access Tokens. Needs <strong>repo</strong> scope.
-        </p>
-      </div>
-      <div class="form-group">
-        <label for="settings-gitea-repo">Repository (owner/repo)</label>
-        <input type="text" id="settings-gitea-repo" class="form-input" placeholder="myuser/command-center-sync" autocomplete="off">
-        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">
-          A repo to store sync data. Will be auto-created if it doesn't exist.
-        </p>
-      </div>
+    <div class="form-group" id="settings-gist-info" style="display:none;">
+      <label>Linked Gist</label>
+      <p style="font-size:0.85rem;color:var(--text-muted);" id="settings-gist-id-display"></p>
+      <button type="button" class="btn btn-secondary" id="settings-unlink" style="margin-top:6px;font-size:0.8rem;">Unlink Gist</button>
     </div>
     <div class="form-group">
       <label for="settings-claude-key">Claude API Key (for chat planner)</label>
@@ -4091,34 +4056,15 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   }
 
   // --- Gist Sync ---
-  // --- Sync Provider Abstraction ---
-  var SYNC_PROVIDER_KEY = 'commandcenter_sync_provider';
   var GIST_TOKEN_KEY = 'commandcenter_gh_token';
   var GIST_ID_KEY = 'commandcenter_gist_id';
   var GIST_FILENAME = 'command-center-data.json';
-  var GITEA_URL_KEY = 'commandcenter_gitea_url';
-  var GITEA_TOKEN_KEY = 'commandcenter_gitea_token';
-  var GITEA_REPO_KEY = 'commandcenter_gitea_repo';
-  var GITEA_SHA_KEY = 'commandcenter_gitea_sha';
-  var GITEA_FILENAME = 'command-center-data.json';
-
-  function getSyncProvider() { return localStorage.getItem(SYNC_PROVIDER_KEY) || 'gist'; }
-  function setSyncProvider(p) { localStorage.setItem(SYNC_PROVIDER_KEY, p); }
 
   function getToken() { return localStorage.getItem(GIST_TOKEN_KEY) || ''; }
   function getGistId() { return localStorage.getItem(GIST_ID_KEY) || ''; }
   function setToken(t) { localStorage.setItem(GIST_TOKEN_KEY, t); }
   function setGistId(id) { localStorage.setItem(GIST_ID_KEY, id); }
   function clearGistId() { localStorage.removeItem(GIST_ID_KEY); }
-
-  function getGiteaUrl() { return (localStorage.getItem(GITEA_URL_KEY) || '').replace(/\/+$/, ''); }
-  function getGiteaToken() { return localStorage.getItem(GITEA_TOKEN_KEY) || ''; }
-  function getGiteaRepo() { return localStorage.getItem(GITEA_REPO_KEY) || ''; }
-  function getGiteaSha() { return localStorage.getItem(GITEA_SHA_KEY) || ''; }
-  function setGiteaUrl(u) { localStorage.setItem(GITEA_URL_KEY, u); }
-  function setGiteaToken(t) { localStorage.setItem(GITEA_TOKEN_KEY, t); }
-  function setGiteaRepo(r) { localStorage.setItem(GITEA_REPO_KEY, r); }
-  function setGiteaSha(s) { localStorage.setItem(GITEA_SHA_KEY, s); }
 
   async function discoverGist(token) {
     try {
@@ -4168,169 +4114,71 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     render();
   }
 
-  // --- Gitea helpers ---
-  async function giteaEnsureRepo() {
-    var url = getGiteaUrl();
-    var token = getGiteaToken();
-    var repo = getGiteaRepo();
-    if (!url || !token || !repo) return false;
-    var parts = repo.split('/');
-    if (parts.length !== 2) return false;
-    // Check if repo exists
-    var resp = await fetch(url + '/api/v1/repos/' + repo, {
-      headers: { 'Authorization': 'token ' + token }
-    });
-    if (resp.ok) return true;
-    // Create repo
-    resp = await fetch(url + '/api/v1/user/repos', {
-      method: 'POST',
-      headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: parts[1], private: true, auto_init: true, description: 'Command Center Sync' })
-    });
-    if (!resp.ok) {
-      var err = await resp.json().catch(function() { return {}; });
-      throw new Error('Failed to create repo: ' + (err.message || resp.status));
-    }
-    return true;
-  }
-
-  async function giteaGetFile() {
-    var url = getGiteaUrl();
-    var token = getGiteaToken();
-    var repo = getGiteaRepo();
-    var resp = await fetch(url + '/api/v1/repos/' + repo + '/contents/' + GITEA_FILENAME, {
-      headers: { 'Authorization': 'token ' + token }
-    });
-    if (resp.status === 404) return null;
-    if (!resp.ok) throw new Error('Gitea fetch failed: HTTP ' + resp.status);
-    var result = await resp.json();
-    setGiteaSha(result.sha);
-    var content = atob(result.content);
-    return JSON.parse(content);
-  }
-
-  async function giteaPutFile(content) {
-    var url = getGiteaUrl();
-    var token = getGiteaToken();
-    var repo = getGiteaRepo();
-    var sha = getGiteaSha();
-    var body = {
-      message: 'Sync ' + new Date().toISOString(),
-      content: btoa(unescape(encodeURIComponent(content)))
-    };
-    if (sha) body.sha = sha;
-    var resp = await fetch(url + '/api/v1/repos/' + repo + '/contents/' + GITEA_FILENAME, {
-      method: 'PUT',
-      headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    if (!resp.ok) {
-      var err = await resp.json().catch(function() { return {}; });
-      throw new Error(err.message || ('HTTP ' + resp.status));
-    }
-    var result = await resp.json();
-    if (result.content && result.content.sha) setGiteaSha(result.content.sha);
-  }
-
-  // --- Internal push helpers (no UI, return success/fail) ---
-  async function pushToGist(syncData) {
+  async function gistPush() {
     var token = getToken();
-    if (!token) return null; // not configured
-    var gistId = getGistId();
-    var body = { description: 'Command Center Sync', public: false, files: {} };
-    body.files[GIST_FILENAME] = { content: syncData };
-    var url = gistId ? ('https://api.github.com/gists/' + gistId) : 'https://api.github.com/gists';
-    var method = gistId ? 'PATCH' : 'POST';
-    var resp = await fetch(url, {
-      method: method,
-      headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    if (!resp.ok) {
-      var err = await resp.json().catch(function() { return {}; });
-      throw new Error('GitHub: ' + (err.message || ('HTTP ' + resp.status)));
-    }
-    var result = await resp.json();
-    if (!gistId) setGistId(result.id);
-    return 'gist';
-  }
-
-  async function pushToGitea(syncData) {
-    var url = getGiteaUrl();
-    var token = getGiteaToken();
-    var repo = getGiteaRepo();
-    if (!url || !token || !repo) return null; // not configured
-    await giteaEnsureRepo();
-    try { await giteaGetFile(); } catch(e) { /* new file, no sha yet */ }
-    await giteaPutFile(syncData);
-    return 'gitea';
-  }
-
-  async function pullFromGist() {
-    var token = getToken();
-    var gistId = getGistId();
-    if (!token) throw new Error('Set your GitHub token in Sync Settings first.');
-    if (!gistId) throw new Error('No linked Gist yet. Push first to create one.');
-    var resp = await fetch('https://api.github.com/gists/' + gistId, {
-      headers: { 'Authorization': 'token ' + token }
-    });
-    if (!resp.ok) {
-      var err = await resp.json().catch(function() { return {}; });
-      throw new Error(err.message || ('HTTP ' + resp.status));
-    }
-    var result = await resp.json();
-    var file = result.files[GIST_FILENAME];
-    if (!file) throw new Error('Sync file not found in Gist');
-    return JSON.parse(file.content);
-  }
-
-  async function pullFromGitea() {
-    var url = getGiteaUrl();
-    var token = getGiteaToken();
-    var repo = getGiteaRepo();
-    if (!url || !token || !repo) throw new Error('Configure Gitea in Sync Settings first.');
-    var data = await giteaGetFile();
-    if (!data) throw new Error('No sync data found on Gitea. Push first.');
-    return data;
-  }
-
-  // --- Unified Push (always both) ---
-  async function syncPush() {
+    if (!token) { alert('Set your GitHub token in Sync Settings first.'); return; }
     var btnPush = document.getElementById('btn-push');
     btnPush.disabled = true;
     setSyncStatus('\u2026');
-    var syncData = buildSyncData();
-    var errors = [];
-    var successes = [];
+    try {
+      var gistId = getGistId();
+      var body = { description: 'Command Center Sync', public: false, files: {} };
+      body.files[GIST_FILENAME] = { content: buildSyncData() };
 
-    // Push to both in parallel
-    var gistPromise = pushToGist(syncData).then(function(r) { if (r) successes.push('GitHub'); }).catch(function(e) { errors.push(e.message); });
-    var giteaPromise = pushToGitea(syncData).then(function(r) { if (r) successes.push('Gitea'); }).catch(function(e) { errors.push(e.message); });
-    await Promise.all([gistPromise, giteaPromise]);
+      var url, method;
+      if (gistId) {
+        url = 'https://api.github.com/gists/' + gistId;
+        method = 'PATCH';
+      } else {
+        url = 'https://api.github.com/gists';
+        method = 'POST';
+      }
 
-    btnPush.disabled = false;
-    if (successes.length === 0 && errors.length === 0) {
-      alert('No sync providers configured. Set up GitHub or Gitea in Settings.');
-      setSyncStatus('', false);
-    } else if (errors.length > 0 && successes.length === 0) {
+      var resp = await fetch(url, {
+        method: method,
+        headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      if (!resp.ok) {
+        var err = await resp.json().catch(function() { return {}; });
+        throw new Error(err.message || ('HTTP ' + resp.status));
+      }
+
+      var result = await resp.json();
+      if (!gistId) setGistId(result.id);
+      setSyncStatus('\u2713', true);
+    } catch (e) {
       setSyncStatus('\u2717', true);
-      alert('Push failed:\n' + errors.join('\n'));
-    } else if (errors.length > 0) {
-      setSyncStatus('\u2713', true);
-      alert('Pushed to ' + successes.join(', ') + ', but failed:\n' + errors.join('\n'));
-    } else {
-      setSyncStatus('\u2713', true);
+      alert('Push failed: ' + e.message);
+    } finally {
+      btnPush.disabled = false;
     }
   }
 
-  // --- Unified Pull (from selected provider) ---
-  async function syncPull() {
-    var provider = getSyncProvider();
+  async function gistPull() {
+    var token = getToken();
+    var gistId = getGistId();
+    if (!token) { alert('Set your GitHub token in Sync Settings first.'); return; }
+    if (!gistId) { alert('No linked Gist yet. Push first to create one.'); return; }
     var btnPull = document.getElementById('btn-pull');
     btnPull.disabled = true;
     setSyncStatus('\u2026');
     try {
-      var data = provider === 'gitea' ? await pullFromGitea() : await pullFromGist();
+      var resp = await fetch('https://api.github.com/gists/' + gistId, {
+        headers: { 'Authorization': 'token ' + token }
+      });
+
+      if (!resp.ok) {
+        var err = await resp.json().catch(function() { return {}; });
+        throw new Error(err.message || ('HTTP ' + resp.status));
+      }
+
+      var result = await resp.json();
+      var file = result.files[GIST_FILENAME];
+      if (!file) throw new Error('Sync file not found in Gist');
+
+      var data = JSON.parse(file.content);
       applySyncData(data);
       setSyncStatus('\u2713', true);
     } catch (e) {
@@ -4341,28 +4189,49 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     }
   }
 
-  document.getElementById('btn-push').addEventListener('click', syncPush);
-  document.getElementById('btn-pull').addEventListener('click', syncPull);
+  document.getElementById('btn-push').addEventListener('click', gistPush);
+  document.getElementById('btn-pull').addEventListener('click', gistPull);
 
   // Silent auto-sync helpers (no alerts, no button state changes)
   async function autoPush() {
-    var syncData = buildSyncData();
+    var token = getToken();
+    if (!token) return;
     setSyncStatus('\u2026');
     try {
-      var gistP = pushToGist(syncData).catch(function(e) { console.warn('Auto-push GitHub failed:', e.message); });
-      var giteaP = pushToGitea(syncData).catch(function(e) { console.warn('Auto-push Gitea failed:', e.message); });
-      await Promise.all([gistP, giteaP]);
+      var gistId = getGistId();
+      var body = { description: 'Command Center Sync', public: false, files: {} };
+      body.files[GIST_FILENAME] = { content: buildSyncData() };
+      var url = gistId ? ('https://api.github.com/gists/' + gistId) : 'https://api.github.com/gists';
+      var method = gistId ? 'PATCH' : 'POST';
+      var resp = await fetch(url, {
+        method: method,
+        headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      var result = await resp.json();
+      if (!gistId) setGistId(result.id);
       setSyncStatus('\u2713', true);
     } catch (e) {
       setSyncStatus('\u2717', true);
+      console.warn('Auto-push failed:', e.message);
     }
   }
 
   async function autoPull() {
-    var provider = getSyncProvider();
+    var token = getToken();
+    var gistId = getGistId();
+    if (!token || !gistId) return;
     setSyncStatus('\u2026');
     try {
-      var data = provider === 'gitea' ? await pullFromGitea() : await pullFromGist();
+      var resp = await fetch('https://api.github.com/gists/' + gistId, {
+        headers: { 'Authorization': 'token ' + token }
+      });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      var result = await resp.json();
+      var file = result.files[GIST_FILENAME];
+      if (!file) throw new Error('Sync file not found');
+      var data = JSON.parse(file.content);
       applySyncData(data);
       setSyncStatus('\u2713', true);
     } catch (e) {
@@ -4374,11 +4243,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   // --- Settings Modal ---
   document.getElementById('btn-settings').addEventListener('click', function() {
     var overlay = document.getElementById('settings-modal-overlay');
-    document.getElementById('settings-sync-provider').value = getSyncProvider();
     document.getElementById('settings-token').value = getToken();
-    document.getElementById('settings-gitea-url').value = getGiteaUrl();
-    document.getElementById('settings-gitea-token').value = getGiteaToken();
-    document.getElementById('settings-gitea-repo').value = getGiteaRepo();
     document.getElementById('settings-claude-key').value = getClaudeKey();
     var gistId = getGistId();
     var gistInfo = document.getElementById('settings-gist-info');
@@ -4398,16 +4263,10 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   });
 
   document.getElementById('settings-save').addEventListener('click', async function() {
-    var provider = document.getElementById('settings-sync-provider').value;
     var token = document.getElementById('settings-token').value.trim();
     var claudeKey = document.getElementById('settings-claude-key').value.trim();
-    setSyncProvider(provider);
     setToken(token);
     setClaudeKey(claudeKey);
-    // Save Gitea settings
-    setGiteaUrl(document.getElementById('settings-gitea-url').value.trim());
-    setGiteaToken(document.getElementById('settings-gitea-token').value.trim());
-    setGiteaRepo(document.getElementById('settings-gitea-repo').value.trim());
     document.getElementById('settings-modal-overlay').classList.remove('open');
     document.body.style.overflow = '';
     // Auto-discover existing Gist if none linked
@@ -4421,8 +4280,6 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         setSyncStatus('', false);
       }
     }
-    // Update pull button title based on provider
-    document.getElementById('btn-pull').title = provider === 'gitea' ? 'Pull from Gitea' : 'Pull from Gist';
   });
 
   document.getElementById('settings-unlink').addEventListener('click', function() {
@@ -4438,13 +4295,6 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       document.body.style.overflow = '';
     }
   });
-
-  // Set initial pull button title
-  (function() {
-    var p = getSyncProvider();
-    document.getElementById('btn-pull').title = p === 'gitea' ? 'Pull from Gitea' : 'Pull from Gist';
-    document.getElementById('btn-push').title = 'Push to all configured providers';
-  })();
 
   // --- Midnight Checker ---
   function startMidnightChecker() {
