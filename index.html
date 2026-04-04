@@ -1369,11 +1369,48 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   <div class="modal-content">
     <h2 class="modal-title">Settings</h2>
     <div class="form-group">
-      <label for="settings-token">GitHub Token (for sync)</label>
-      <input type="password" id="settings-token" class="form-input" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off">
-      <p style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">
-        Create at GitHub &rarr; Settings &rarr; Developer settings &rarr; Personal access tokens. Only the <strong>gist</strong> scope is needed.
-      </p>
+      <label for="settings-sync-provider">Sync Provider</label>
+      <select id="settings-sync-provider" class="form-input" style="appearance:auto;-webkit-appearance:menulist;padding:10px 12px;">
+        <option value="gist">GitHub Gist</option>
+        <option value="gitea">Gitea</option>
+      </select>
+    </div>
+    <div id="settings-gist-section">
+      <div class="form-group">
+        <label for="settings-token">GitHub Token</label>
+        <input type="password" id="settings-token" class="form-input" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off">
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">
+          Create at GitHub &rarr; Settings &rarr; Developer settings &rarr; Personal access tokens. Only the <strong>gist</strong> scope is needed.
+        </p>
+      </div>
+      <div class="form-group" id="settings-gist-info" style="display:none;">
+        <label>Linked Gist</label>
+        <p style="font-size:0.85rem;color:var(--text-muted);" id="settings-gist-id-display"></p>
+        <button type="button" class="btn btn-secondary" id="settings-unlink" style="margin-top:6px;font-size:0.8rem;">Unlink Gist</button>
+      </div>
+    </div>
+    <div id="settings-gitea-section" style="display:none;">
+      <div class="form-group">
+        <label for="settings-gitea-url">Gitea URL</label>
+        <input type="url" id="settings-gitea-url" class="form-input" placeholder="https://gitea.example.com" autocomplete="off">
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">
+          Your self-hosted Gitea instance URL (e.g. <strong>https://gitea.yourdomain.com</strong>).
+        </p>
+      </div>
+      <div class="form-group">
+        <label for="settings-gitea-token">Gitea Token</label>
+        <input type="password" id="settings-gitea-token" class="form-input" placeholder="your-gitea-token" autocomplete="off">
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">
+          Create at Gitea &rarr; Settings &rarr; Applications &rarr; Access Tokens. Needs <strong>repo</strong> scope.
+        </p>
+      </div>
+      <div class="form-group">
+        <label for="settings-gitea-repo">Repository (owner/repo)</label>
+        <input type="text" id="settings-gitea-repo" class="form-input" placeholder="myuser/command-center-sync" autocomplete="off">
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">
+          A repo to store sync data. Will be auto-created if it doesn't exist.
+        </p>
+      </div>
     </div>
     <div class="form-group">
       <label for="settings-claude-key">Claude API Key (for chat planner)</label>
@@ -1381,11 +1418,6 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       <p style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">
         Get your key at <strong>console.anthropic.com</strong>. Powers the AI project planner chat.
       </p>
-    </div>
-    <div class="form-group" id="settings-gist-info" style="display:none;">
-      <label>Linked Gist</label>
-      <p style="font-size:0.85rem;color:var(--text-muted);" id="settings-gist-id-display"></p>
-      <button type="button" class="btn btn-secondary" id="settings-unlink" style="margin-top:6px;font-size:0.8rem;">Unlink Gist</button>
     </div>
     <div class="modal-actions">
       <button type="button" class="btn btn-secondary" id="settings-cancel">Cancel</button>
@@ -4056,15 +4088,34 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   }
 
   // --- Gist Sync ---
+  // --- Sync Provider Abstraction ---
+  var SYNC_PROVIDER_KEY = 'commandcenter_sync_provider';
   var GIST_TOKEN_KEY = 'commandcenter_gh_token';
   var GIST_ID_KEY = 'commandcenter_gist_id';
   var GIST_FILENAME = 'command-center-data.json';
+  var GITEA_URL_KEY = 'commandcenter_gitea_url';
+  var GITEA_TOKEN_KEY = 'commandcenter_gitea_token';
+  var GITEA_REPO_KEY = 'commandcenter_gitea_repo';
+  var GITEA_SHA_KEY = 'commandcenter_gitea_sha';
+  var GITEA_FILENAME = 'command-center-data.json';
+
+  function getSyncProvider() { return localStorage.getItem(SYNC_PROVIDER_KEY) || 'gist'; }
+  function setSyncProvider(p) { localStorage.setItem(SYNC_PROVIDER_KEY, p); }
 
   function getToken() { return localStorage.getItem(GIST_TOKEN_KEY) || ''; }
   function getGistId() { return localStorage.getItem(GIST_ID_KEY) || ''; }
   function setToken(t) { localStorage.setItem(GIST_TOKEN_KEY, t); }
   function setGistId(id) { localStorage.setItem(GIST_ID_KEY, id); }
   function clearGistId() { localStorage.removeItem(GIST_ID_KEY); }
+
+  function getGiteaUrl() { return (localStorage.getItem(GITEA_URL_KEY) || '').replace(/\/+$/, ''); }
+  function getGiteaToken() { return localStorage.getItem(GITEA_TOKEN_KEY) || ''; }
+  function getGiteaRepo() { return localStorage.getItem(GITEA_REPO_KEY) || ''; }
+  function getGiteaSha() { return localStorage.getItem(GITEA_SHA_KEY) || ''; }
+  function setGiteaUrl(u) { localStorage.setItem(GITEA_URL_KEY, u); }
+  function setGiteaToken(t) { localStorage.setItem(GITEA_TOKEN_KEY, t); }
+  function setGiteaRepo(r) { localStorage.setItem(GITEA_REPO_KEY, r); }
+  function setGiteaSha(s) { localStorage.setItem(GITEA_SHA_KEY, s); }
 
   async function discoverGist(token) {
     try {
@@ -4112,6 +4163,124 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       saveCategories();
     }
     render();
+  }
+
+  // --- Gitea helpers ---
+  async function giteaEnsureRepo() {
+    var url = getGiteaUrl();
+    var token = getGiteaToken();
+    var repo = getGiteaRepo();
+    if (!url || !token || !repo) return false;
+    var parts = repo.split('/');
+    if (parts.length !== 2) return false;
+    // Check if repo exists
+    var resp = await fetch(url + '/api/v1/repos/' + repo, {
+      headers: { 'Authorization': 'token ' + token }
+    });
+    if (resp.ok) return true;
+    // Create repo
+    resp = await fetch(url + '/api/v1/user/repos', {
+      method: 'POST',
+      headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: parts[1], private: true, auto_init: true, description: 'Command Center Sync' })
+    });
+    if (!resp.ok) {
+      var err = await resp.json().catch(function() { return {}; });
+      throw new Error('Failed to create repo: ' + (err.message || resp.status));
+    }
+    return true;
+  }
+
+  async function giteaGetFile() {
+    var url = getGiteaUrl();
+    var token = getGiteaToken();
+    var repo = getGiteaRepo();
+    var resp = await fetch(url + '/api/v1/repos/' + repo + '/contents/' + GITEA_FILENAME, {
+      headers: { 'Authorization': 'token ' + token }
+    });
+    if (resp.status === 404) return null;
+    if (!resp.ok) throw new Error('Gitea fetch failed: HTTP ' + resp.status);
+    var result = await resp.json();
+    setGiteaSha(result.sha);
+    var content = atob(result.content);
+    return JSON.parse(content);
+  }
+
+  async function giteaPutFile(content) {
+    var url = getGiteaUrl();
+    var token = getGiteaToken();
+    var repo = getGiteaRepo();
+    var sha = getGiteaSha();
+    var body = {
+      message: 'Sync ' + new Date().toISOString(),
+      content: btoa(unescape(encodeURIComponent(content)))
+    };
+    if (sha) body.sha = sha;
+    var resp = await fetch(url + '/api/v1/repos/' + repo + '/contents/' + GITEA_FILENAME, {
+      method: 'PUT',
+      headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!resp.ok) {
+      var err = await resp.json().catch(function() { return {}; });
+      throw new Error(err.message || ('HTTP ' + resp.status));
+    }
+    var result = await resp.json();
+    if (result.content && result.content.sha) setGiteaSha(result.content.sha);
+  }
+
+  // --- Unified Push/Pull ---
+  async function syncPush() {
+    var provider = getSyncProvider();
+    if (provider === 'gitea') {
+      var url = getGiteaUrl();
+      var token = getGiteaToken();
+      var repo = getGiteaRepo();
+      if (!url || !token || !repo) { alert('Configure Gitea in Sync Settings first.'); return; }
+      var btnPush = document.getElementById('btn-push');
+      btnPush.disabled = true;
+      setSyncStatus('\u2026');
+      try {
+        await giteaEnsureRepo();
+        // Get current sha before pushing
+        try { await giteaGetFile(); } catch(e) { /* new file */ }
+        await giteaPutFile(buildSyncData());
+        setSyncStatus('\u2713', true);
+      } catch (e) {
+        setSyncStatus('\u2717', true);
+        alert('Push failed: ' + e.message);
+      } finally {
+        btnPush.disabled = false;
+      }
+    } else {
+      await gistPush();
+    }
+  }
+
+  async function syncPull() {
+    var provider = getSyncProvider();
+    if (provider === 'gitea') {
+      var url = getGiteaUrl();
+      var token = getGiteaToken();
+      var repo = getGiteaRepo();
+      if (!url || !token || !repo) { alert('Configure Gitea in Sync Settings first.'); return; }
+      var btnPull = document.getElementById('btn-pull');
+      btnPull.disabled = true;
+      setSyncStatus('\u2026');
+      try {
+        var data = await giteaGetFile();
+        if (!data) throw new Error('No sync data found. Push first.');
+        applySyncData(data);
+        setSyncStatus('\u2713', true);
+      } catch (e) {
+        setSyncStatus('\u2717', true);
+        alert('Pull failed: ' + e.message);
+      } finally {
+        btnPull.disabled = false;
+      }
+    } else {
+      await gistPull();
+    }
   }
 
   async function gistPush() {
@@ -4189,28 +4358,39 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     }
   }
 
-  document.getElementById('btn-push').addEventListener('click', gistPush);
-  document.getElementById('btn-pull').addEventListener('click', gistPull);
+  document.getElementById('btn-push').addEventListener('click', syncPush);
+  document.getElementById('btn-pull').addEventListener('click', syncPull);
 
   // Silent auto-sync helpers (no alerts, no button state changes)
   async function autoPush() {
-    var token = getToken();
-    if (!token) return;
+    var provider = getSyncProvider();
     setSyncStatus('\u2026');
     try {
-      var gistId = getGistId();
-      var body = { description: 'Command Center Sync', public: false, files: {} };
-      body.files[GIST_FILENAME] = { content: buildSyncData() };
-      var url = gistId ? ('https://api.github.com/gists/' + gistId) : 'https://api.github.com/gists';
-      var method = gistId ? 'PATCH' : 'POST';
-      var resp = await fetch(url, {
-        method: method,
-        headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      var result = await resp.json();
-      if (!gistId) setGistId(result.id);
+      if (provider === 'gitea') {
+        var url = getGiteaUrl();
+        var token = getGiteaToken();
+        var repo = getGiteaRepo();
+        if (!url || !token || !repo) return;
+        await giteaEnsureRepo();
+        try { await giteaGetFile(); } catch(e) { /* new file */ }
+        await giteaPutFile(buildSyncData());
+      } else {
+        var ghToken = getToken();
+        if (!ghToken) return;
+        var gistId = getGistId();
+        var body = { description: 'Command Center Sync', public: false, files: {} };
+        body.files[GIST_FILENAME] = { content: buildSyncData() };
+        var gistUrl = gistId ? ('https://api.github.com/gists/' + gistId) : 'https://api.github.com/gists';
+        var method = gistId ? 'PATCH' : 'POST';
+        var resp = await fetch(gistUrl, {
+          method: method,
+          headers: { 'Authorization': 'token ' + ghToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        var result = await resp.json();
+        if (!gistId) setGistId(result.id);
+      }
       setSyncStatus('\u2713', true);
     } catch (e) {
       setSyncStatus('\u2717', true);
@@ -4219,20 +4399,30 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   }
 
   async function autoPull() {
-    var token = getToken();
-    var gistId = getGistId();
-    if (!token || !gistId) return;
+    var provider = getSyncProvider();
     setSyncStatus('\u2026');
     try {
-      var resp = await fetch('https://api.github.com/gists/' + gistId, {
-        headers: { 'Authorization': 'token ' + token }
-      });
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      var result = await resp.json();
-      var file = result.files[GIST_FILENAME];
-      if (!file) throw new Error('Sync file not found');
-      var data = JSON.parse(file.content);
-      applySyncData(data);
+      if (provider === 'gitea') {
+        var url = getGiteaUrl();
+        var token = getGiteaToken();
+        var repo = getGiteaRepo();
+        if (!url || !token || !repo) return;
+        var data = await giteaGetFile();
+        if (!data) return;
+        applySyncData(data);
+      } else {
+        var ghToken = getToken();
+        var gistId = getGistId();
+        if (!ghToken || !gistId) return;
+        var resp = await fetch('https://api.github.com/gists/' + gistId, {
+          headers: { 'Authorization': 'token ' + ghToken }
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        var result = await resp.json();
+        var file = result.files[GIST_FILENAME];
+        if (!file) throw new Error('Sync file not found');
+        applySyncData(JSON.parse(file.content));
+      }
       setSyncStatus('\u2713', true);
     } catch (e) {
       setSyncStatus('\u2717', true);
@@ -4241,9 +4431,20 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   }
 
   // --- Settings Modal ---
+  function updateSettingsSections() {
+    var provider = document.getElementById('settings-sync-provider').value;
+    document.getElementById('settings-gist-section').style.display = provider === 'gist' ? '' : 'none';
+    document.getElementById('settings-gitea-section').style.display = provider === 'gitea' ? '' : 'none';
+  }
+  document.getElementById('settings-sync-provider').addEventListener('change', updateSettingsSections);
+
   document.getElementById('btn-settings').addEventListener('click', function() {
     var overlay = document.getElementById('settings-modal-overlay');
+    document.getElementById('settings-sync-provider').value = getSyncProvider();
     document.getElementById('settings-token').value = getToken();
+    document.getElementById('settings-gitea-url').value = getGiteaUrl();
+    document.getElementById('settings-gitea-token').value = getGiteaToken();
+    document.getElementById('settings-gitea-repo').value = getGiteaRepo();
     document.getElementById('settings-claude-key').value = getClaudeKey();
     var gistId = getGistId();
     var gistInfo = document.getElementById('settings-gist-info');
@@ -4253,6 +4454,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     } else {
       gistInfo.style.display = 'none';
     }
+    updateSettingsSections();
     overlay.classList.add('open');
     document.body.style.overflow = 'hidden';
   });
@@ -4263,14 +4465,20 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   });
 
   document.getElementById('settings-save').addEventListener('click', async function() {
+    var provider = document.getElementById('settings-sync-provider').value;
     var token = document.getElementById('settings-token').value.trim();
     var claudeKey = document.getElementById('settings-claude-key').value.trim();
+    setSyncProvider(provider);
     setToken(token);
     setClaudeKey(claudeKey);
+    // Save Gitea settings
+    setGiteaUrl(document.getElementById('settings-gitea-url').value.trim());
+    setGiteaToken(document.getElementById('settings-gitea-token').value.trim());
+    setGiteaRepo(document.getElementById('settings-gitea-repo').value.trim());
     document.getElementById('settings-modal-overlay').classList.remove('open');
     document.body.style.overflow = '';
-    // Auto-discover existing Gist if none linked
-    if (token && !getGistId()) {
+    // Auto-discover existing Gist if none linked (only for gist provider)
+    if (provider === 'gist' && token && !getGistId()) {
       setSyncStatus('\u2026');
       var found = await discoverGist(token);
       if (found) {
@@ -4280,6 +4488,9 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         setSyncStatus('', false);
       }
     }
+    // Update button titles based on provider
+    document.getElementById('btn-pull').title = provider === 'gitea' ? 'Pull from Gitea' : 'Pull from Gist';
+    document.getElementById('btn-push').title = provider === 'gitea' ? 'Push to Gitea' : 'Push to Gist';
   });
 
   document.getElementById('settings-unlink').addEventListener('click', function() {
@@ -4295,6 +4506,13 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       document.body.style.overflow = '';
     }
   });
+
+  // Set initial button titles based on saved provider
+  (function() {
+    var p = getSyncProvider();
+    document.getElementById('btn-pull').title = p === 'gitea' ? 'Pull from Gitea' : 'Pull from Gist';
+    document.getElementById('btn-push').title = p === 'gitea' ? 'Push to Gitea' : 'Push to Gist';
+  })();
 
   // --- Midnight Checker ---
   function startMidnightChecker() {
