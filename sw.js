@@ -1,4 +1,4 @@
-const CACHE_NAME = 'command-center-v33';
+const CACHE_NAME = 'command-center-v34';
 
 // Only cache static assets that rarely change — NOT index.html
 const ASSETS = [

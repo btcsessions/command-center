@@ -1681,8 +1681,10 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   }
 
   var _autoSyncTimer = null;
+  var _syncReady = false; // Block pushes until first pull completes
   function scheduleAutoSync() {
     if (_suppressAutoSync) return;
+    if (!_syncReady) return; // Never push before first pull
     if (_autoSyncTimer) clearTimeout(_autoSyncTimer);
     _autoSyncTimer = setTimeout(function() {
       _autoSyncTimer = null;
@@ -4311,19 +4313,32 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     if (temp) setTimeout(function() { el.textContent = ''; }, 3000);
   }
 
+  var LAST_SYNC_KEY = 'commandcenter_last_sync';
+  function getLastSyncTime() { return localStorage.getItem(LAST_SYNC_KEY) || ''; }
+  function setLastSyncTime(t) { localStorage.setItem(LAST_SYNC_KEY, t); }
+
   function buildSyncData() {
+    var now = new Date().toISOString();
+    setLastSyncTime(now);
     return JSON.stringify({
       version: CURRENT_VERSION,
-      syncedAt: new Date().toISOString(),
+      syncedAt: now,
       tasks: tasks,
       categories: categories
     }, null, 2);
   }
 
   var _suppressAutoSync = false;
-  function applySyncData(data) {
+  function applySyncData(data, force) {
     var imported = Array.isArray(data.tasks) ? data.tasks : null;
     if (!imported) throw new Error('Invalid sync data');
+    // Compare timestamps — never overwrite newer local data with older remote
+    var remoteSyncedAt = data.syncedAt || '';
+    var localSyncedAt = getLastSyncTime();
+    if (!force && localSyncedAt && remoteSyncedAt && remoteSyncedAt < localSyncedAt) {
+      console.log('Skipping pull: remote data (' + remoteSyncedAt + ') is older than local (' + localSyncedAt + ')');
+      return false;
+    }
     var fromVersion = data.version || 1;
     if (fromVersion < CURRENT_VERSION) {
       runMigrations(imported, fromVersion);
@@ -4337,7 +4352,9 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       saveCategories();
     }
     _suppressAutoSync = false;
+    setLastSyncTime(remoteSyncedAt);
     render();
+    return true;
   }
 
   async function gistPush() {
@@ -4405,7 +4422,8 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       if (!file) throw new Error('Sync file not found in Gist');
 
       var data = JSON.parse(file.content);
-      applySyncData(data);
+      applySyncData(data, true); // force — user explicitly requested pull
+      _syncReady = true;
       setSyncStatus('\u2713', true);
     } catch (e) {
       setSyncStatus('\u2717', true);
@@ -4415,11 +4433,15 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     }
   }
 
-  document.getElementById('btn-push').addEventListener('click', gistPush);
+  document.getElementById('btn-push').addEventListener('click', function() {
+    _syncReady = true; // User explicitly pushing — they know what they're doing
+    gistPush();
+  });
   document.getElementById('btn-pull').addEventListener('click', gistPull);
 
   // Silent auto-sync helpers (no alerts, no button state changes)
   async function autoPush() {
+    if (!_syncReady) return; // Never push before first pull
     var token = getToken();
     if (!token) return;
     setSyncStatus('\u2026');
@@ -4447,7 +4469,11 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   async function autoPull() {
     var token = getToken();
     var gistId = getGistId();
-    if (!token || !gistId) return;
+    if (!token || !gistId) {
+      // No sync configured — allow local changes to work
+      _syncReady = true;
+      return;
+    }
     setSyncStatus('\u2026');
     try {
       var resp = await fetch('https://api.github.com/gists/' + gistId, {
@@ -4464,6 +4490,8 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       setSyncStatus('\u2717', true);
       console.warn('Auto-pull failed:', e.message);
     }
+    // Unlock auto-push — pull completed (even if it failed, we tried)
+    _syncReady = true;
   }
 
   // --- Settings Modal ---
