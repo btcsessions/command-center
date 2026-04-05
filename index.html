@@ -1151,6 +1151,66 @@ header .date {
 /* Textarea in modal */
 textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; }
 
+/* Calendar picker */
+.cal-wrap { position: relative; }
+.cal-display {
+  width: 100%; padding: 10px 12px;
+  background: rgba(10, 20, 16, 0.8);
+  border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text);
+  font-size: 1rem; font-family: inherit;
+  cursor: pointer; outline: none;
+  transition: border-color 0.15s;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.cal-display:focus { border-color: #00d4aa; box-shadow: 0 0 0 2px var(--glow); }
+.cal-display-text { color: var(--text); }
+.cal-display-text.empty { color: var(--text-muted); }
+.cal-clear { background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; padding: 0 4px; line-height: 1; }
+.cal-clear:hover { color: var(--danger); }
+.cal-dropdown {
+  display: none; position: absolute; z-index: 100;
+  top: calc(100% + 4px); left: 0; right: 0;
+  background: rgba(10, 20, 16, 0.97);
+  border: 1px solid rgba(0, 212, 170, 0.3);
+  border-radius: 10px; padding: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+.cal-dropdown.open { display: block; }
+.cal-nav {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 8px;
+}
+.cal-nav-btn {
+  background: none; border: none; color: var(--text-muted);
+  font-size: 1.1rem; cursor: pointer; padding: 4px 8px;
+  border-radius: 6px; transition: background 0.15s, color 0.15s;
+}
+.cal-nav-btn:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+.cal-month {
+  font-size: 0.85rem; font-weight: 600; color: var(--text);
+  text-align: center;
+}
+.cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+  text-align: center;
+}
+.cal-dow {
+  font-size: 0.6rem; font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; padding: 4px 0;
+}
+.cal-day {
+  background: none; border: none; color: var(--text);
+  font-size: 0.8rem; padding: 6px 0; cursor: pointer;
+  border-radius: 6px; transition: background 0.12s;
+  font-family: inherit;
+}
+.cal-day:hover { background: rgba(0, 212, 170, 0.15); }
+.cal-day.today { color: #00d4aa; font-weight: 700; }
+.cal-day.selected { background: #00d4aa; color: #0a1410; font-weight: 700; }
+.cal-day.other-month { color: var(--text-muted); opacity: 0.4; }
+.cal-day.past { opacity: 0.5; }
+
 /* Preview urgency dot */
 .preview-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 
@@ -1323,8 +1383,22 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         </div>
       </div>
       <div class="form-group">
-        <label for="input-due-date">Due Date (optional)</label>
-        <input type="date" id="input-due-date" class="form-input">
+        <label>Due Date (optional)</label>
+        <div class="cal-wrap" id="cal-wrap">
+          <div class="cal-display" id="cal-display" tabindex="0">
+            <span class="cal-display-text empty" id="cal-display-text">Select a date</span>
+            <button type="button" class="cal-clear hidden" id="cal-clear" title="Clear date">&times;</button>
+          </div>
+          <input type="hidden" id="input-due-date">
+          <div class="cal-dropdown" id="cal-dropdown">
+            <div class="cal-nav">
+              <button type="button" class="cal-nav-btn" id="cal-prev">&#x25C0;</button>
+              <span class="cal-month" id="cal-month"></span>
+              <button type="button" class="cal-nav-btn" id="cal-next">&#x25B6;</button>
+            </div>
+            <div class="cal-grid" id="cal-grid"></div>
+          </div>
+        </div>
       </div>
       <div class="form-group">
         <label for="input-notes">Notes (optional)</label>
@@ -2433,7 +2507,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     clearDayToggles();
     setActiveUrgency('medium');
     setActiveType('task');
-    document.getElementById('input-due-date').value = '';
+    document.getElementById('cal-wrap').setDate('');
     document.getElementById('input-notes').value = '';
 
     if (modalParentId) {
@@ -2458,7 +2532,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       document.getElementById('input-title').value = task.title;
       document.getElementById('input-category').value = task.category;
       setActiveUrgency(task.urgency || 'medium');
-      document.getElementById('input-due-date').value = task.dueDate || '';
+      document.getElementById('cal-wrap').setDate(task.dueDate || '');
       document.getElementById('input-notes').value = task.notes || '';
       if (task.isProject) {
         setActiveType('project');
@@ -4066,6 +4140,143 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   if ('speechSynthesis' in window) {
     speechSynthesis.onvoiceschanged = function() { pickVoice(); };
   }
+
+  // --- Calendar Picker ---
+  (function() {
+    var wrap = document.getElementById('cal-wrap');
+    var display = document.getElementById('cal-display');
+    var displayText = document.getElementById('cal-display-text');
+    var clearBtn = document.getElementById('cal-clear');
+    var dropdown = document.getElementById('cal-dropdown');
+    var grid = document.getElementById('cal-grid');
+    var monthLabel = document.getElementById('cal-month');
+    var hiddenInput = document.getElementById('input-due-date');
+    var viewYear, viewMonth; // 0-indexed month
+
+    var MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    var DAYS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+    function today() { var d = new Date(); return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() }; }
+    function pad(n) { return n < 10 ? '0' + n : '' + n; }
+    function toStr(y, m, d) { return y + '-' + pad(m + 1) + '-' + pad(d); }
+    function formatDisplay(str) {
+      if (!str) return null;
+      var p = str.split('-');
+      var d = new Date(+p[0], +p[1] - 1, +p[2]);
+      return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    function renderCal() {
+      var t = today();
+      var sel = hiddenInput.value || '';
+      monthLabel.textContent = MONTHS[viewMonth] + ' ' + viewYear;
+
+      var html = '';
+      for (var i = 0; i < 7; i++) html += '<span class="cal-dow">' + DAYS[i] + '</span>';
+
+      var first = new Date(viewYear, viewMonth, 1).getDay();
+      var daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+      var prevDays = new Date(viewYear, viewMonth, 0).getDate();
+
+      // Previous month padding
+      for (var i = 0; i < first; i++) {
+        var d = prevDays - first + 1 + i;
+        var pm = viewMonth === 0 ? 11 : viewMonth - 1;
+        var py = viewMonth === 0 ? viewYear - 1 : viewYear;
+        var s = toStr(py, pm, d);
+        html += '<button type="button" class="cal-day other-month" data-date="' + s + '">' + d + '</button>';
+      }
+
+      // Current month
+      for (var d = 1; d <= daysInMonth; d++) {
+        var s = toStr(viewYear, viewMonth, d);
+        var cls = 'cal-day';
+        if (d === t.d && viewMonth === t.m && viewYear === t.y) cls += ' today';
+        if (s === sel) cls += ' selected';
+        html += '<button type="button" class="' + cls + '" data-date="' + s + '">' + d + '</button>';
+      }
+
+      // Next month padding
+      var total = first + daysInMonth;
+      var rem = total % 7 === 0 ? 0 : 7 - (total % 7);
+      for (var i = 1; i <= rem; i++) {
+        var nm = viewMonth === 11 ? 0 : viewMonth + 1;
+        var ny = viewMonth === 11 ? viewYear + 1 : viewYear;
+        var s = toStr(ny, nm, i);
+        html += '<button type="button" class="cal-day other-month" data-date="' + s + '">' + i + '</button>';
+      }
+
+      grid.innerHTML = html;
+    }
+
+    function openCal() {
+      var val = hiddenInput.value;
+      if (val) {
+        var p = val.split('-');
+        viewYear = +p[0]; viewMonth = +p[1] - 1;
+      } else {
+        var t = today();
+        viewYear = t.y; viewMonth = t.m;
+      }
+      renderCal();
+      dropdown.classList.add('open');
+    }
+
+    function closeCal() { dropdown.classList.remove('open'); }
+
+    function selectDate(str) {
+      hiddenInput.value = str;
+      displayText.textContent = formatDisplay(str);
+      displayText.classList.remove('empty');
+      clearBtn.classList.remove('hidden');
+      closeCal();
+    }
+
+    function clearDate() {
+      hiddenInput.value = '';
+      displayText.textContent = 'Select a date';
+      displayText.classList.add('empty');
+      clearBtn.classList.add('hidden');
+    }
+
+    // Set value programmatically (for edit modal)
+    wrap.setDate = function(str) {
+      if (str) { selectDate(str); } else { clearDate(); }
+    };
+
+    display.addEventListener('click', function(e) {
+      if (e.target === clearBtn || e.target.closest('.cal-clear')) return;
+      dropdown.classList.contains('open') ? closeCal() : openCal();
+    });
+
+    clearBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      clearDate();
+    });
+
+    document.getElementById('cal-prev').addEventListener('click', function() {
+      viewMonth--;
+      if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+      renderCal();
+    });
+
+    document.getElementById('cal-next').addEventListener('click', function() {
+      viewMonth++;
+      if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+      renderCal();
+    });
+
+    grid.addEventListener('click', function(e) {
+      var btn = e.target.closest('.cal-day');
+      if (!btn) return;
+      selectDate(btn.dataset.date);
+    });
+
+    // Close calendar when clicking outside
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('#cal-wrap')) closeCal();
+    });
+  })();
 
   // --- Gist Sync ---
   var GIST_TOKEN_KEY = 'commandcenter_gh_token';
