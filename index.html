@@ -1485,6 +1485,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 
   function saveCategories() {
     localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
+    scheduleAutoSync();
   }
 
   function addCategory(name, icon, color) {
@@ -1602,6 +1603,17 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   function saveTasks() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
     localStorage.setItem(VERSION_KEY, String(CURRENT_VERSION));
+    scheduleAutoSync();
+  }
+
+  var _autoSyncTimer = null;
+  function scheduleAutoSync() {
+    if (_suppressAutoSync) return;
+    if (_autoSyncTimer) clearTimeout(_autoSyncTimer);
+    _autoSyncTimer = setTimeout(function() {
+      _autoSyncTimer = null;
+      if (typeof autoPush === 'function') autoPush();
+    }, 2000);
   }
 
   function pruneOldData() {
@@ -4097,6 +4109,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     }, null, 2);
   }
 
+  var _suppressAutoSync = false;
   function applySyncData(data) {
     var imported = Array.isArray(data.tasks) ? data.tasks : null;
     if (!imported) throw new Error('Invalid sync data');
@@ -4106,11 +4119,13 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     }
     tasks = imported;
     pruneOldData();
+    _suppressAutoSync = true;
     saveTasks();
     if (Array.isArray(data.categories) && data.categories.length > 0) {
       categories = data.categories;
       saveCategories();
     }
+    _suppressAutoSync = false;
     render();
   }
 
