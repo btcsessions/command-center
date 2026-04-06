@@ -4243,6 +4243,11 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   }
 
   // --- Ongoing Habits ---
+  function escapeHtml(s) {
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
   var HABITS_KEY = 'commandcenter_habits';
   var habits = [];
   var editingHabitId = null;
