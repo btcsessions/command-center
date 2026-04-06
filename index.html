@@ -150,6 +150,82 @@ body {
   font-size: 0.6rem; color: var(--text-muted); min-width: 18px; text-align: center;
 }
 
+/* Habits section */
+.habits-section {
+  padding: 0 8px 8px;
+}
+@media (min-width: 640px) {
+  .habits-section { padding: 0 16px 12px; }
+}
+.habits-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 0 4px;
+}
+.habits-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+.habits-add-btn {
+  background: none; border: none;
+  color: var(--text-muted); font-size: 1rem;
+  cursor: pointer; padding: 2px 6px;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+.habits-add-btn:hover { background: rgba(255,255,255,0.08); color: #00d4aa; }
+.habits-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+}
+.habits-row::-webkit-scrollbar { display: none; }
+.habit-card {
+  flex: 0 0 auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  max-width: 200px;
+}
+.habit-card:hover { border-color: rgba(0, 212, 170, 0.4); background: var(--surface-hover); }
+.habit-card-emoji { font-size: 0.9rem; flex-shrink: 0; }
+.habit-card-text {
+  font-size: 0.75rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.habit-add-card {
+  flex: 0 0 auto;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  transition: border-color 0.15s, color 0.15s;
+}
+.habit-add-card:hover { border-color: rgba(0, 212, 170, 0.4); color: #00d4aa; }
+
 /* Pull to refresh */
 .pull-refresh {
   text-align: center;
@@ -1327,6 +1403,8 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 
 <div class="next-action-bar" id="next-action-bar"></div>
 
+<div class="habits-section" id="habits-section"></div>
+
 <main id="app"></main>
 
 <div class="modal-overlay" id="modal-overlay">
@@ -1465,6 +1543,27 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       <button type="button" class="btn btn-secondary" id="settings-cancel">Cancel</button>
       <button type="button" class="btn btn-primary" id="settings-save">Save</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="habit-modal-overlay">
+  <div class="modal-content">
+    <h2 class="modal-title" id="habit-modal-title">Add Habit</h2>
+    <form id="habit-form">
+      <div class="form-group">
+        <label for="habit-input-title">Habit</label>
+        <input type="text" id="habit-input-title" class="form-input" placeholder="e.g. High calorie/protein diet" required autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label for="habit-input-category">Category</label>
+        <select id="habit-input-category" class="form-input form-select"></select>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="habit-btn-cancel">Cancel</button>
+        <button type="button" class="btn btn-danger hidden" id="habit-btn-delete">Delete</button>
+        <button type="submit" class="btn btn-primary" id="habit-btn-save">Save</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -4143,6 +4242,146 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     speechSynthesis.onvoiceschanged = function() { pickVoice(); };
   }
 
+  // --- Ongoing Habits ---
+  var HABITS_KEY = 'commandcenter_habits';
+  var habits = [];
+  var editingHabitId = null;
+
+  function loadHabits() {
+    try {
+      var raw = localStorage.getItem(HABITS_KEY);
+      habits = raw ? JSON.parse(raw) : [];
+    } catch (e) { habits = []; }
+  }
+
+  function saveHabits() {
+    localStorage.setItem(HABITS_KEY, JSON.stringify(habits));
+    scheduleAutoSync();
+  }
+
+  function renderHabits() {
+    var section = document.getElementById('habits-section');
+    if (habits.length === 0) {
+      section.innerHTML = '<div class="habits-header"><span class="habits-title">Ongoing Habits</span></div>' +
+        '<div class="habits-row"><div class="habit-add-card" id="habit-add-trigger">+ Add Habit</div></div>';
+      section.querySelector('#habit-add-trigger').addEventListener('click', openAddHabit);
+      return;
+    }
+
+    var html = '<div class="habits-header"><span class="habits-title">Ongoing Habits</span></div><div class="habits-row">';
+
+    // Sort habits by category order
+    var catOrder = {};
+    categories.forEach(function(c, i) { catOrder[c.id] = i; });
+    var sorted = habits.slice().sort(function(a, b) {
+      var ao = catOrder[a.category] !== undefined ? catOrder[a.category] : 999;
+      var bo = catOrder[b.category] !== undefined ? catOrder[b.category] : 999;
+      if (ao !== bo) return ao - bo;
+      return (a.sortOrder || 0) - (b.sortOrder || 0);
+    });
+
+    sorted.forEach(function(h) {
+      var cat = categories.find(function(c) { return c.id === h.category; });
+      var emoji = cat ? cat.icon : '';
+      html += '<div class="habit-card" data-habit-id="' + h.id + '">' +
+        '<span class="habit-card-emoji">' + emoji + '</span>' +
+        '<span class="habit-card-text">' + escapeHtml(h.title) + '</span></div>';
+    });
+
+    html += '<div class="habit-add-card" id="habit-add-trigger">+</div></div>';
+    section.innerHTML = html;
+
+    // Event listeners
+    section.querySelector('#habit-add-trigger').addEventListener('click', openAddHabit);
+    section.querySelectorAll('.habit-card').forEach(function(card) {
+      card.addEventListener('click', function() {
+        var id = this.dataset.habitId;
+        openEditHabit(id);
+      });
+    });
+  }
+
+  function openAddHabit() {
+    editingHabitId = null;
+    document.getElementById('habit-modal-title').textContent = 'Add Habit';
+    document.getElementById('habit-input-title').value = '';
+    document.getElementById('habit-btn-delete').classList.add('hidden');
+    populateHabitCategories();
+    document.getElementById('habit-modal-overlay').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function openEditHabit(id) {
+    var h = habits.find(function(x) { return x.id === id; });
+    if (!h) return;
+    editingHabitId = id;
+    document.getElementById('habit-modal-title').textContent = 'Edit Habit';
+    document.getElementById('habit-input-title').value = h.title;
+    document.getElementById('habit-btn-delete').classList.remove('hidden');
+    populateHabitCategories();
+    document.getElementById('habit-input-category').value = h.category;
+    document.getElementById('habit-modal-overlay').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function populateHabitCategories() {
+    var sel = document.getElementById('habit-input-category');
+    sel.innerHTML = '';
+    categories.forEach(function(c) {
+      var opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.icon + ' ' + c.name;
+      sel.appendChild(opt);
+    });
+  }
+
+  function closeHabitModal() {
+    document.getElementById('habit-modal-overlay').classList.remove('open');
+    document.body.style.overflow = '';
+    editingHabitId = null;
+  }
+
+  document.getElementById('habit-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var title = document.getElementById('habit-input-title').value.trim();
+    var category = document.getElementById('habit-input-category').value;
+    if (!title) return;
+
+    if (editingHabitId) {
+      var h = habits.find(function(x) { return x.id === editingHabitId; });
+      if (h) {
+        h.title = title;
+        h.category = category;
+      }
+    } else {
+      habits.push({
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        title: title,
+        category: category,
+        sortOrder: habits.length
+      });
+    }
+    saveHabits();
+    renderHabits();
+    closeHabitModal();
+  });
+
+  document.getElementById('habit-btn-cancel').addEventListener('click', closeHabitModal);
+
+  document.getElementById('habit-btn-delete').addEventListener('click', function() {
+    if (!editingHabitId) return;
+    if (confirm('Delete this habit?')) {
+      habits = habits.filter(function(h) { return h.id !== editingHabitId; });
+      saveHabits();
+      renderHabits();
+      closeHabitModal();
+    }
+  });
+
+  document.getElementById('habit-modal-overlay').addEventListener('click', function(e) {
+    if (e.target === this) closeHabitModal();
+  });
+
   // --- Calendar Picker ---
   (function() {
     var wrap = document.getElementById('cal-wrap');
@@ -4324,7 +4563,8 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       version: CURRENT_VERSION,
       syncedAt: now,
       tasks: tasks,
-      categories: categories
+      categories: categories,
+      habits: habits
     }, null, 2);
   }
 
@@ -4351,9 +4591,14 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       categories = data.categories;
       saveCategories();
     }
+    if (Array.isArray(data.habits)) {
+      habits = data.habits;
+      saveHabits();
+    }
     _suppressAutoSync = false;
     setLastSyncTime(remoteSyncedAt);
     render();
+    renderHabits();
     return true;
   }
 
@@ -4564,7 +4809,9 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   function init() {
     loadCategories();
     loadTasks();
+    loadHabits();
     render();
+    renderHabits();
     startMidnightChecker();
     // Auto-pull from Gist on launch (silent, won't alert if not configured)
     autoPull();
