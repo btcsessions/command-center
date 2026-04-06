@@ -4683,9 +4683,17 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   app.addEventListener('touchcancel', function() { swiping = false; });
 })();
 
-// Register service worker for PWA
+// Unregister all service workers — they cause stale cache issues
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js');
+  navigator.serviceWorker.getRegistrations().then(function(registrations) {
+    registrations.forEach(function(reg) { reg.unregister(); });
+  });
+  // Clear all caches left behind by old service workers
+  if (window.caches) {
+    caches.keys().then(function(keys) {
+      keys.forEach(function(key) { caches.delete(key); });
+    });
+  }
 }
 </script>
 </body>
