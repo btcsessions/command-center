@@ -1380,10 +1380,24 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 
   // --- Export / Import ---
   document.getElementById('btn-export').addEventListener('click', function() {
+    var now = Date.now();
+    var day90 = 90 * 86400000;
+    // Deep-clone and strip completed one-time tasks; prune stale recurring dates
+    var exportTasks = [];
+    tasks.forEach(function(t) {
+      if (!t.recurring && t.completions.length > 0) return; // skip completed one-time tasks
+      var clone = JSON.parse(JSON.stringify(t));
+      if (clone.recurring && clone.completions.length > 0) {
+        clone.completions = clone.completions.filter(function(d) {
+          return (now - new Date(d + 'T00:00:00').getTime()) < day90;
+        });
+      }
+      exportTasks.push(clone);
+    });
     var data = {
       version: CURRENT_VERSION,
       exportedAt: new Date().toISOString(),
-      tasks: tasks
+      tasks: exportTasks
     };
     var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
@@ -1415,6 +1429,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
         }
         if (!confirm('Replace all current tasks with ' + imported.length + ' tasks from backup?')) return;
         tasks = imported;
+        pruneOldData();
         saveTasks();
         render();
       } catch (err) {
