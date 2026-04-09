@@ -1771,6 +1771,10 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       saveTasks();
     }
     pruneOldData();
+    // Persist pruned state so old completed tasks don't linger in localStorage
+    _suppressAutoSync = true;
+    saveTasks();
+    _suppressAutoSync = false;
   }
 
   function saveTasks() {
@@ -4564,10 +4568,15 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   function buildSyncData() {
     var now = new Date().toISOString();
     setLastSyncTime(now);
+    // Filter out completed one-time tasks — they're done and should never sync
+    var syncTasks = tasks.filter(function(t) {
+      if (!t.recurring && t.completions.length > 0) return false;
+      return true;
+    });
     return JSON.stringify({
       version: CURRENT_VERSION,
       syncedAt: now,
-      tasks: tasks,
+      tasks: syncTasks,
       categories: categories,
       habits: habits
     }, null, 2);
