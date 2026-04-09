@@ -732,6 +732,14 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     _pushTimer = setTimeout(function() { pushToGist(); }, 1000);
   }
 
+  function getActiveTasks() {
+    return tasks.filter(function(t) {
+      // Strip completed one-time tasks — they're done forever
+      if (!t.recurring && t.completions.length > 0) return false;
+      return true;
+    });
+  }
+
   function pushToGist() {
     var cfg = getSyncConfig();
     if (!cfg) return Promise.resolve();
@@ -743,7 +751,7 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
       content: JSON.stringify({
         version: CURRENT_VERSION,
         syncedAt: new Date().toISOString(),
-        tasks: tasks
+        tasks: getActiveTasks()
       }, null, 2)
     };
     return fetch('https://api.github.com/gists/' + cfg.gistId, {
