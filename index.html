@@ -474,6 +474,45 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   opacity: 0.5;
   transition: opacity 0.3s;
 }
+
+/* Sync status indicator */
+.sync-indicator {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.7rem; color: var(--text-muted); padding: 2px 8px;
+  border-radius: 10px; background: rgba(255,255,255,0.05);
+  transition: all 0.3s;
+}
+.sync-indicator.syncing { color: #3b82f6; }
+.sync-indicator.synced { color: #22c55e; }
+.sync-indicator.error { color: #ef4444; }
+.sync-indicator.offline { color: var(--text-muted); }
+.sync-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+}
+.sync-indicator.syncing .sync-dot { animation: pulse 1s infinite; }
+
+/* Sync settings panel */
+.sync-settings {
+  max-width: 400px; margin: 0 auto; padding: 12px 16px;
+  background: var(--surface); border-radius: var(--radius);
+  display: none;
+}
+.sync-settings.open { display: block; }
+.sync-settings label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; margin-top: 10px; }
+.sync-settings label:first-child { margin-top: 0; }
+.sync-settings input[type="text"], .sync-settings input[type="password"] {
+  width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font-size: 0.85rem; font-family: inherit;
+}
+.sync-settings .sync-actions { display: flex; gap: 8px; margin-top: 14px; }
+.sync-settings .sync-actions button {
+  flex: 1; padding: 8px; border: none; border-radius: 6px; font-size: 0.8rem;
+  font-weight: 600; cursor: pointer; font-family: inherit; min-height: 36px;
+  transition: opacity 0.15s;
+}
+.sync-settings .sync-actions button:active { opacity: 0.8; }
+.sync-save-btn { background: var(--work); color: #fff; }
+.sync-clear-btn { background: var(--surface-hover); color: var(--text); }
 </style>
 </head>
 <body>
@@ -482,11 +521,24 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   <h1>Next Action</h1>
   <div class="date" id="today-date"></div>
   <div class="backup-bar">
-    <button class="backup-btn" id="btn-export">Export Backup</button>
-    <button class="backup-btn" id="btn-import">Import Backup</button>
+    <span class="sync-indicator offline" id="sync-indicator"><span class="sync-dot"></span><span id="sync-label">No sync</span></span>
+    <button class="backup-btn" id="btn-sync-settings">Sync</button>
+    <button class="backup-btn" id="btn-export">Export</button>
+    <button class="backup-btn" id="btn-import">Import</button>
     <input type="file" id="import-file" accept=".json" class="hidden">
   </div>
 </header>
+
+<div class="sync-settings" id="sync-settings">
+  <label for="input-gist-token">GitHub Personal Access Token</label>
+  <input type="password" id="input-gist-token" placeholder="ghp_..." autocomplete="off">
+  <label for="input-gist-id">Gist ID</label>
+  <input type="text" id="input-gist-id" placeholder="e.g. a1b2c3d4e5f6..." autocomplete="off">
+  <div class="sync-actions">
+    <button class="sync-clear-btn" id="btn-sync-clear">Disconnect</button>
+    <button class="sync-save-btn" id="btn-sync-save">Connect & Sync</button>
+  </div>
+</div>
 
 <main id="app"></main>
 
@@ -564,6 +616,9 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
 
   const STORAGE_KEY = 'nextaction_tasks';
   const VERSION_KEY = 'nextaction_version';
+  const SYNC_TOKEN_KEY = 'nextaction_sync_token';
+  const SYNC_GIST_KEY = 'nextaction_sync_gist';
+  const SYNC_FILE = 'nextaction-data.json';
   const CURRENT_VERSION = 3;
 
   // Versioned migration functions: each takes the tasks array and mutates it in place.
@@ -657,6 +712,98 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     }
   }
 
+  // --- Gist Sync ---
+  function getSyncConfig() {
+    var token = localStorage.getItem(SYNC_TOKEN_KEY);
+    var gistId = localStorage.getItem(SYNC_GIST_KEY);
+    return (token && gistId) ? { token: token, gistId: gistId } : null;
+  }
+
+  function setSyncStatus(state, label) {
+    var el = document.getElementById('sync-indicator');
+    var lbl = document.getElementById('sync-label');
+    el.className = 'sync-indicator ' + state;
+    lbl.textContent = label;
+  }
+
+  var _pushTimer = null;
+  function debouncedPushToGist() {
+    if (_pushTimer) clearTimeout(_pushTimer);
+    _pushTimer = setTimeout(function() { pushToGist(); }, 1000);
+  }
+
+  function pushToGist() {
+    var cfg = getSyncConfig();
+    if (!cfg) return Promise.resolve();
+    setSyncStatus('syncing', 'Pushing...');
+    var body = {
+      files: {}
+    };
+    body.files[SYNC_FILE] = {
+      content: JSON.stringify({
+        version: CURRENT_VERSION,
+        syncedAt: new Date().toISOString(),
+        tasks: tasks
+      }, null, 2)
+    };
+    return fetch('https://api.github.com/gists/' + cfg.gistId, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': 'token ' + cfg.token,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    }).then(function(res) {
+      if (!res.ok) throw new Error('Push failed: ' + res.status);
+      setSyncStatus('synced', 'Synced');
+      return res.json();
+    }).catch(function(err) {
+      console.error('Gist push error:', err);
+      setSyncStatus('error', 'Push failed');
+    });
+  }
+
+  function pullFromGist() {
+    var cfg = getSyncConfig();
+    if (!cfg) return Promise.resolve(null);
+    setSyncStatus('syncing', 'Pulling...');
+    return fetch('https://api.github.com/gists/' + cfg.gistId, {
+      headers: {
+        'Authorization': 'token ' + cfg.token,
+        'Accept': 'application/vnd.github.v3+json'
+      }
+    }).then(function(res) {
+      if (!res.ok) throw new Error('Pull failed: ' + res.status);
+      return res.json();
+    }).then(function(gist) {
+      var file = gist.files[SYNC_FILE];
+      if (!file || !file.content) {
+        setSyncStatus('synced', 'Synced (empty)');
+        return null;
+      }
+      var data = JSON.parse(file.content);
+      var remote = Array.isArray(data.tasks) ? data.tasks : null;
+      if (!remote) {
+        setSyncStatus('synced', 'Synced');
+        return null;
+      }
+      var fromVersion = data.version || 1;
+      if (fromVersion < CURRENT_VERSION) {
+        runMigrations(remote, fromVersion);
+      }
+      tasks = remote;
+      pruneOldData();
+      saveTasks(true);
+      setSyncStatus('synced', 'Synced');
+      return tasks;
+    }).catch(function(err) {
+      console.error('Gist pull error:', err);
+      setSyncStatus('error', 'Pull failed');
+      return null;
+    });
+  }
+
   // --- Data Layer ---
   function loadTasks() {
     try {
@@ -668,15 +815,16 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     var storedVersion = parseInt(localStorage.getItem(VERSION_KEY), 10) || 1;
     if (storedVersion < CURRENT_VERSION) {
       runMigrations(tasks, storedVersion);
-      saveTasks();
+      saveTasks(true);
     }
     pruneOldData();
-    saveTasks();
+    saveTasks(true);
   }
 
-  function saveTasks() {
+  function saveTasks(skipSync) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
     localStorage.setItem(VERSION_KEY, String(CURRENT_VERSION));
+    if (!skipSync) debouncedPushToGist();
   }
 
   function pruneOldData() {
@@ -1441,6 +1589,39 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     e.target.value = '';
   });
 
+  // --- Sync Settings UI ---
+  document.getElementById('btn-sync-settings').addEventListener('click', function() {
+    var panel = document.getElementById('sync-settings');
+    var isOpen = panel.classList.toggle('open');
+    if (isOpen) {
+      document.getElementById('input-gist-token').value = localStorage.getItem(SYNC_TOKEN_KEY) || '';
+      document.getElementById('input-gist-id').value = localStorage.getItem(SYNC_GIST_KEY) || '';
+    }
+  });
+
+  document.getElementById('btn-sync-save').addEventListener('click', function() {
+    var token = document.getElementById('input-gist-token').value.trim();
+    var gistId = document.getElementById('input-gist-id').value.trim();
+    if (!token || !gistId) { alert('Both fields are required.'); return; }
+    localStorage.setItem(SYNC_TOKEN_KEY, token);
+    localStorage.setItem(SYNC_GIST_KEY, gistId);
+    document.getElementById('sync-settings').classList.remove('open');
+    setSyncStatus('syncing', 'Connecting...');
+    pullFromGist().then(function(pulled) {
+      if (pulled) { render(); }
+      else { pushToGist(); }
+    });
+  });
+
+  document.getElementById('btn-sync-clear').addEventListener('click', function() {
+    localStorage.removeItem(SYNC_TOKEN_KEY);
+    localStorage.removeItem(SYNC_GIST_KEY);
+    document.getElementById('input-gist-token').value = '';
+    document.getElementById('input-gist-id').value = '';
+    document.getElementById('sync-settings').classList.remove('open');
+    setSyncStatus('offline', 'No sync');
+  });
+
   // --- Midnight Checker ---
   function startMidnightChecker() {
     setInterval(function() {
@@ -1456,6 +1637,13 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
     loadTasks();
     render();
     startMidnightChecker();
+    // If gist sync is configured, pull latest then re-render
+    if (getSyncConfig()) {
+      setSyncStatus('syncing', 'Syncing...');
+      pullFromGist().then(function(pulled) {
+        if (pulled) render();
+      });
+    }
   }
 
   if (document.readyState === 'loading') {
