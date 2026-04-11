@@ -1,7 +1,25 @@
-import { createTask, updateTask, deleteTask, expandedCategories, editingTaskId, setEditingTaskId, getTasks, getCategories, addCategory, updateCategoryById, deleteCategoryById, CATEGORY_COLORS, CATEGORY_EMOJIS } from '../state.js';
+import { createTask, updateTask, deleteTask, expandedCategories, expandedProjects, editingTaskId, setEditingTaskId, modalParentId, setModalParentId, getTasks, getCategories, addCategory, updateCategoryById, deleteCategoryById, CATEGORY_COLORS, CATEGORY_EMOJIS } from '../state.js';
 import { render } from '../render.js';
 
 let editingCatId = null;
+
+function setActiveType(type) {
+  document.querySelectorAll('.type-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.type === type);
+  });
+  const isProject = (type === 'project');
+  const recurrenceGroup = document.getElementById('input-recurrence').closest('.form-group');
+  recurrenceGroup.classList.toggle('hidden', isProject);
+  if (isProject) {
+    document.getElementById('weekly-group').classList.add('hidden');
+    document.getElementById('custom-group').classList.add('hidden');
+  }
+}
+
+function getActiveType() {
+  const active = document.querySelector('.type-btn.active');
+  return active ? active.dataset.type : 'task';
+}
 
 function setActiveUrgency(level) {
   document.querySelectorAll('.urgency-btn').forEach(btn => {
@@ -49,21 +67,46 @@ function buildRecurring() {
   return null;
 }
 
-export function openModal(mode, task, defaultCategory) {
+export function openModal(mode, task, defaultCategory, parentId) {
   setEditingTaskId((mode === 'edit' && task) ? task.id : null);
+  setModalParentId(parentId || null);
   const overlay = document.getElementById('modal-overlay');
   const titleEl = document.getElementById('modal-title');
   const form = document.getElementById('task-form');
   const deleteBtn = document.getElementById('btn-delete');
+  const categoryGroup = document.getElementById('category-group');
+  const projectGroup = document.getElementById('project-group');
+  const recurrenceGroup = document.getElementById('input-recurrence').closest('.form-group');
 
-  titleEl.textContent = mode === 'edit' ? 'Edit Task' : 'Add Task';
-  deleteBtn.classList.toggle('hidden', mode !== 'edit');
+  // Reset visibility
+  categoryGroup.classList.remove('hidden');
+  projectGroup.classList.remove('hidden');
+  recurrenceGroup.classList.remove('hidden');
 
   form.reset();
   clearDayToggles();
   setActiveUrgency('medium');
+  setActiveType('task');
   document.getElementById('input-due-date').value = '';
   document.getElementById('input-notes').value = '';
+
+  if (parentId) {
+    // Sub-task mode
+    titleEl.textContent = mode === 'edit' ? 'Edit Sub-task' : 'Add Sub-task';
+    categoryGroup.classList.add('hidden');
+    projectGroup.classList.add('hidden');
+  } else if (mode === 'edit') {
+    titleEl.textContent = task && task.parentId ? 'Edit Sub-task' : 'Edit Task';
+    if (task && task.parentId) {
+      categoryGroup.classList.add('hidden');
+      projectGroup.classList.add('hidden');
+      setModalParentId(task.parentId);
+    }
+  } else {
+    titleEl.textContent = 'Add Task';
+  }
+
+  deleteBtn.classList.toggle('hidden', mode !== 'edit');
 
   if (mode === 'edit' && task) {
     document.getElementById('input-title').value = task.title;
@@ -71,6 +114,9 @@ export function openModal(mode, task, defaultCategory) {
     setActiveUrgency(task.urgency || 'medium');
     document.getElementById('input-due-date').value = task.dueDate || '';
     document.getElementById('input-notes').value = task.notes || '';
+    if (task.isProject) {
+      setActiveType('project');
+    }
     if (task.recurring) {
       document.getElementById('input-recurrence').value = task.recurring.type;
       if (task.recurring.type === 'weekly') {
@@ -88,7 +134,7 @@ export function openModal(mode, task, defaultCategory) {
     document.getElementById('input-category').value = defaultCategory;
   }
 
-  updateRecurrenceUI();
+  if (!parentId) updateRecurrenceUI();
   overlay.classList.add('open');
   document.body.style.overflow = 'hidden';
   setTimeout(() => document.getElementById('input-title').focus(), 100);
@@ -98,24 +144,40 @@ export function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
   document.body.style.overflow = '';
   setEditingTaskId(null);
+  setModalParentId(null);
 }
 
 async function handleFormSubmit(e) {
   e.preventDefault();
   const title = document.getElementById('input-title').value.trim();
   if (!title) return;
-  const category = document.getElementById('input-category').value;
-  const recurring = buildRecurring();
   const urgency = getActiveUrgency();
   const dueDate = document.getElementById('input-due-date').value || null;
   const notes = document.getElementById('input-notes').value.trim();
+  const isProject = getActiveType() === 'project';
+  const recurring = isProject ? null : buildRecurring();
 
   if (editingTaskId) {
-    await updateTask(editingTaskId, {
-      title, category, recurring, urgency, dueDate, notes
-    });
+    const editTask = getTasks().find(t => t.id === editingTaskId);
+    const updates = { title, urgency, dueDate, notes };
+    if (!editTask.parentId && !modalParentId) {
+      updates.category = document.getElementById('input-category').value;
+      updates.isProject = isProject;
+      updates.recurring = recurring;
+      if (isProject) updates.recurring = null;
+    } else {
+      updates.recurring = recurring;
+    }
+    await updateTask(editingTaskId, updates);
+  } else if (modalParentId) {
+    // Creating a subtask
+    const parentTask = getTasks().find(t => t.id === modalParentId);
+    const category = parentTask ? parentTask.category : document.getElementById('input-category').value;
+    await createTask(title, category, recurring, urgency, dueDate, notes, false, modalParentId);
+    expandedProjects.add(modalParentId);
   } else {
-    await createTask(title, category, recurring, urgency, dueDate, notes);
+    const category = document.getElementById('input-category').value;
+    await createTask(title, category, recurring, urgency, dueDate, notes, isProject);
     if (!expandedCategories.has(category)) {
       expandedCategories.add(category);
     }
@@ -156,6 +218,11 @@ export function initModalEvents() {
   document.getElementById('urgency-toggles').addEventListener('click', e => {
     const btn = e.target.closest('.urgency-btn');
     if (btn) setActiveUrgency(btn.dataset.urgency);
+  });
+
+  document.getElementById('type-toggles').addEventListener('click', e => {
+    const btn = e.target.closest('.type-btn');
+    if (btn) setActiveType(btn.dataset.type);
   });
 }
 

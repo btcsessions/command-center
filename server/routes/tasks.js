@@ -19,7 +19,10 @@ function rowToTask(row, completions) {
     sortOrder: row.sort_order,
     urgency: row.urgency,
     dueDate: row.due_date,
-    notes: row.notes || ''
+    notes: row.notes || '',
+    isProject: !!row.is_project,
+    parentId: row.parent_id || null,
+    subtaskOrder: row.subtask_order ? JSON.parse(row.subtask_order) : []
   };
 }
 
@@ -42,14 +45,14 @@ router.get('/', (req, res) => {
 // POST /api/tasks - create a task
 router.post('/', (req, res) => {
   const db = getDb();
-  const { id, category, title, recurring, sortOrder, urgency, dueDate, notes, createdAt } = req.body;
+  const { id, category, title, recurring, sortOrder, urgency, dueDate, notes, createdAt, isProject, parentId, subtaskOrder } = req.body;
 
   const taskId = id || (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
   const now = new Date().toISOString();
 
   db.prepare(`
-    INSERT INTO tasks (id, category, title, recurring_type, recurring_days, recurring_interval, sort_order, urgency, due_date, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO tasks (id, category, title, recurring_type, recurring_days, recurring_interval, sort_order, urgency, due_date, notes, created_at, updated_at, is_project, parent_id, subtask_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     taskId,
     category,
@@ -62,7 +65,10 @@ router.post('/', (req, res) => {
     dueDate || null,
     notes || '',
     createdAt || now,
-    now
+    now,
+    isProject ? 1 : 0,
+    parentId || null,
+    JSON.stringify(subtaskOrder || [])
   );
 
   // Log to sync
@@ -94,6 +100,9 @@ router.put('/:id', (req, res) => {
     fields.recurring_days = updates.recurring?.days ? JSON.stringify(updates.recurring.days) : null;
     fields.recurring_interval = updates.recurring?.interval || null;
   }
+  if (updates.isProject !== undefined) fields.is_project = updates.isProject ? 1 : 0;
+  if (updates.parentId !== undefined) fields.parent_id = updates.parentId || null;
+  if (updates.subtaskOrder !== undefined) fields.subtask_order = JSON.stringify(updates.subtaskOrder);
 
   if (Object.keys(fields).length > 0) {
     fields.updated_at = now;

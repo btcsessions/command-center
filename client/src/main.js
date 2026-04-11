@@ -1,5 +1,5 @@
 import './styles/main.css';
-import { initialLoad, completeTask, expandedCategories, expandedNotes, getTasks } from './state.js';
+import { initialLoad, completeTask, expandedCategories, expandedNotes, expandedProjects, getTasks } from './state.js';
 import { render, startMidnightChecker, updateSyncIndicator } from './render.js';
 import { openModal, closeModal, initModalEvents, openCatModal, initCatModalEvents } from './components/modal.js';
 import { initSync } from './sync.js';
@@ -19,6 +19,29 @@ function initEventDelegation() {
         expandedCategories.add(cat);
       }
       render();
+      return;
+    }
+
+    // Project expand/collapse
+    const projArrow = e.target.closest('.project-expand-arrow');
+    if (projArrow) {
+      const item = projArrow.closest('.task-item');
+      if (item) {
+        const id = item.dataset.id;
+        if (expandedProjects.has(id)) {
+          expandedProjects.delete(id);
+        } else {
+          expandedProjects.add(id);
+        }
+        render();
+      }
+      return;
+    }
+
+    // Add subtask
+    const addSubBtn = e.target.closest('.add-subtask-btn');
+    if (addSubBtn) {
+      openModal('add', null, null, addSubBtn.dataset.projectId);
       return;
     }
 

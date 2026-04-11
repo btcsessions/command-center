@@ -94,8 +94,11 @@ export const URGENCY_COLORS = { low: '#64748b', medium: '#00d4aa', high: '#f59e0
 let tasks = [];
 export let expandedCategories = new Set();
 export let expandedNotes = new Set();
+export let expandedProjects = new Set();
 export let editingTaskId = null;
+export let modalParentId = null;
 export function setEditingTaskId(id) { editingTaskId = id; }
+export function setModalParentId(id) { modalParentId = id; }
 
 // Load tasks from IndexedDB (offline-first)
 export async function loadTasks() {
@@ -114,21 +117,41 @@ function getUrgencyWeight(task, todayStr) {
 export function getVisibleTasks(category) {
   const todayStr = getTodayStr();
   return tasks
-    .filter(t => t.category === category && isTaskVisible(t, todayStr))
+    .filter(t => t.category === category && !t.parentId && isTaskVisible(t, todayStr))
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+export function getVisibleSubtasks(projectId) {
+  const todayStr = getTodayStr();
+  const project = tasks.find(t => t.id === projectId);
+  const order = (project && project.subtaskOrder) || [];
+  return tasks
+    .filter(t => t.parentId === projectId && isTaskVisible(t, todayStr))
     .sort((a, b) => {
-      const aDue = a.dueDate || '';
-      const bDue = b.dueDate || '';
-      if (aDue || bDue) {
-        if (aDue && !bDue) return -1;
-        if (!aDue && bDue) return 1;
-        if (aDue < bDue) return -1;
-        if (aDue > bDue) return 1;
-      }
-      const ua = getUrgencyWeight(a, todayStr);
-      const ub = getUrgencyWeight(b, todayStr);
-      if (ua !== ub) return ua - ub;
-      return a.sortOrder - b.sortOrder;
+      const ai = order.indexOf(a.id);
+      const bi = order.indexOf(b.id);
+      return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
     });
+}
+
+export function getAllSubtasks(projectId) {
+  return tasks.filter(t => t.parentId === projectId);
+}
+
+export function getSubtaskProgress(projectId) {
+  const todayStr = getTodayStr();
+  const subs = getAllSubtasks(projectId);
+  const done = subs.filter(t => {
+    if (!t.recurring) return t.completions.length > 0;
+    return t.completions.includes(todayStr);
+  }).length;
+  return { done, total: subs.length };
+}
+
+export function getNextAction(task) {
+  if (!task.isProject) return task;
+  const subs = getVisibleSubtasks(task.id);
+  return subs.length > 0 ? subs[0] : task;
 }
 
 function nextSortOrder(category) {
@@ -137,7 +160,7 @@ function nextSortOrder(category) {
   return Math.max(...catTasks.map(t => t.sortOrder)) + 1;
 }
 
-export async function createTask(title, category, recurring, urgency, dueDate, notes) {
+export async function createTask(title, category, recurring, urgency, dueDate, notes, isProject, parentId) {
   const id = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
   const task = {
     id,
@@ -149,11 +172,18 @@ export async function createTask(title, category, recurring, urgency, dueDate, n
     sortOrder: nextSortOrder(category),
     urgency: urgency || 'medium',
     dueDate: dueDate || null,
-    notes: notes || ''
+    notes: notes || '',
+    isProject: !!isProject,
+    parentId: parentId || null,
+    subtaskOrder: []
   };
 
   // Optimistic local update
   tasks.push(task);
+  if (parentId) {
+    const parent = tasks.find(t => t.id === parentId);
+    if (parent) parent.subtaskOrder.push(id);
+  }
   await db.putTask(task);
 
   // Queue for sync
@@ -170,7 +200,26 @@ export async function updateTask(id, updates) {
 }
 
 export async function deleteTask(id) {
-  tasks = tasks.filter(t => t.id !== id);
+  const task = tasks.find(t => t.id === id);
+  if (task && task.isProject) {
+    // Cascade delete all subtasks
+    const subtasks = tasks.filter(t => t.parentId === id);
+    for (const sub of subtasks) {
+      await db.deleteTaskLocal(sub.id);
+      await queueOperation({ type: 'delete', taskId: sub.id });
+    }
+    tasks = tasks.filter(t => t.parentId !== id && t.id !== id);
+  } else {
+    // Remove subtask from parent's subtaskOrder
+    if (task && task.parentId) {
+      const parent = tasks.find(t => t.id === task.parentId);
+      if (parent) {
+        parent.subtaskOrder = parent.subtaskOrder.filter(sid => sid !== id);
+        await db.putTask(parent);
+      }
+    }
+    tasks = tasks.filter(t => t.id !== id);
+  }
   await db.deleteTaskLocal(id);
   await queueOperation({ type: 'delete', taskId: id });
 }
@@ -184,6 +233,21 @@ export async function completeTask(id) {
   }
   await db.putTask(task);
   await queueOperation({ type: 'complete', taskId: id, date: todayStr });
+
+  // Auto-complete project when all subtasks are done
+  if (task.parentId) {
+    const progress = getSubtaskProgress(task.parentId);
+    if (progress.total > 0 && progress.done === progress.total) {
+      if (confirm('All sub-tasks complete! Mark project as done?')) {
+        const parent = tasks.find(t => t.id === task.parentId);
+        if (parent && !parent.completions.includes(todayStr)) {
+          parent.completions.push(todayStr);
+          await db.putTask(parent);
+          await queueOperation({ type: 'complete', taskId: parent.id, date: todayStr });
+        }
+      }
+    }
+  }
 }
 
 export async function reorderCategory(category, orderedIds) {
@@ -195,6 +259,15 @@ export async function reorderCategory(category, orderedIds) {
   const updated = tasks.filter(t => t.category === category);
   for (const t of updated) await db.putTask(t);
   await queueOperation({ type: 'reorder', category, orderedIds });
+}
+
+export async function reorderSubtasks(projectId, orderedIds) {
+  const project = tasks.find(t => t.id === projectId);
+  if (project) {
+    project.subtaskOrder = orderedIds;
+    await db.putTask(project);
+    await queueOperation({ type: 'update', taskId: projectId, updates: { subtaskOrder: orderedIds } });
+  }
 }
 
 // Initial data load: try server first, fall back to IndexedDB

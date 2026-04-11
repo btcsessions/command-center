@@ -597,6 +597,63 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   animation: slideUp 0.3s ease;
 }
 
+/* Project expand arrow */
+.project-expand-arrow {
+  background: none; border: none; color: var(--text-muted); cursor: pointer;
+  font-size: 0.7rem; padding: 4px; flex-shrink: 0; min-width: 22px; min-height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.2s, color 0.15s; border-radius: 4px;
+}
+.project-expand-arrow:hover { color: var(--text); }
+.task-wrapper[data-expanded="true"] .project-expand-arrow { transform: rotate(90deg); }
+
+/* Project content layout */
+.project-content { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.project-title-row { display: flex; align-items: center; gap: 8px; }
+.project-meta-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* Progress bar */
+.project-progress { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.progress-bar {
+  width: 36px; height: 4px; background: rgba(255,255,255,0.1);
+  border-radius: 2px; overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%; border-radius: 2px;
+  background: var(--cat-color); transition: width 0.3s;
+}
+.progress-text { font-size: 0.7rem; color: var(--text-muted); white-space: nowrap; }
+
+/* Subtask indentation */
+.subtask-item .task-item { padding-left: 12px; }
+.subtask-list {
+  border-left: 2px solid rgba(255,255,255,0.06);
+  margin-left: 8px;
+}
+
+/* Add sub-task button */
+.add-subtask-btn {
+  display: block; width: calc(100% - 24px); margin: 2px 8px 8px 16px;
+  padding: 6px 10px; background: rgba(255,255,255,0.02);
+  border: 1px dashed var(--border); border-radius: 6px;
+  color: var(--text-muted); font-size: 0.8rem; cursor: pointer;
+  min-height: 36px; font-family: inherit;
+  transition: background 0.15s, border-color 0.15s;
+}
+.add-subtask-btn:hover {
+  background: rgba(255,255,255,0.06); border-color: var(--cat-color); color: var(--text);
+}
+
+/* Type toggle in modal */
+.type-toggles { display: flex; gap: 6px; }
+.type-btn {
+  flex: 1; padding: 8px; border-radius: 8px; border: 2px solid var(--border);
+  background: transparent; color: var(--text-muted); font-size: 0.85rem;
+  font-weight: 600; cursor: pointer; min-height: 40px; font-family: inherit;
+  transition: all 0.15s;
+}
+.type-btn.active { background: #00d4aa; border-color: #00d4aa; color: #0a1410; }
+
 /* Color swatches for category editor */
 .color-swatches { display: flex; gap: 8px; flex-wrap: wrap; }
 .color-swatch {

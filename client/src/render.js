@@ -1,4 +1,4 @@
-import { getCategories, URGENCY_COLORS, expandedCategories, expandedNotes, getVisibleTasks, reorderCategory } from './state.js';
+import { getCategories, URGENCY_COLORS, expandedCategories, expandedNotes, expandedProjects, getVisibleTasks, getVisibleSubtasks, getSubtaskProgress, reorderCategory } from './state.js';
 import { getTodayStr, formatDateDisplay, getRecurrenceLabel, formatDueDate } from './utils/dates.js';
 import { linkifyText } from './utils/linkify.js';
 import { initDragDesktop, initDragTouch } from './utils/drag.js';
@@ -97,6 +97,30 @@ export function render() {
     } else {
       visible.forEach((task, idx) => {
         list.appendChild(renderTaskItem(task, idx === 0, todayStr));
+        // Render subtasks if this is an expanded project
+        if (task.isProject && expandedProjects.has(task.id)) {
+          const subtasks = getVisibleSubtasks(task.id);
+          const subtaskList = document.createElement('div');
+          subtaskList.className = 'subtask-list task-list';
+          subtaskList.dataset.projectId = task.id;
+          subtaskList.dataset.category = cat.id;
+          if (subtasks.length === 0) {
+            const emptyS = document.createElement('div');
+            emptyS.className = 'empty-msg';
+            emptyS.textContent = 'No sub-tasks yet';
+            subtaskList.appendChild(emptyS);
+          } else {
+            subtasks.forEach(sub => {
+              subtaskList.appendChild(renderTaskItem(sub, false, todayStr, true));
+            });
+          }
+          list.appendChild(subtaskList);
+          const addSubBtn = document.createElement('button');
+          addSubBtn.className = 'add-subtask-btn';
+          addSubBtn.dataset.projectId = task.id;
+          addSubBtn.textContent = '+ Add Sub-task';
+          list.appendChild(addSubBtn);
+        }
       });
     }
 
@@ -123,10 +147,13 @@ export function render() {
   app.appendChild(addCatCard);
 }
 
-function renderTaskItem(task, isFirst, todayStr) {
+function renderTaskItem(task, isFirst, todayStr, isSubtask) {
   const wrapper = document.createElement('div');
-  wrapper.className = 'task-wrapper';
+  wrapper.className = 'task-wrapper' + (isSubtask ? ' subtask-item' : '');
   wrapper.dataset.id = task.id;
+  if (task.isProject) {
+    wrapper.dataset.expanded = expandedProjects.has(task.id) ? 'true' : 'false';
+  }
 
   const li = document.createElement('div');
   li.className = 'task-item' + (isFirst ? ' first-task' : '');
@@ -140,50 +167,114 @@ function renderTaskItem(task, isFirst, todayStr) {
   const urgDot = document.createElement('span');
   urgDot.className = 'urgency-dot ' + (task.urgency || 'medium');
 
-  const check = document.createElement('input');
-  check.type = 'checkbox';
-  check.className = 'task-check';
-  check.setAttribute('aria-label', 'Complete ' + task.title);
-
-  const title = document.createElement('span');
-  title.className = 'task-title';
-  title.textContent = task.title;
-
   li.appendChild(handle);
   li.appendChild(urgDot);
-  li.appendChild(check);
-  li.appendChild(title);
 
-  const label = getRecurrenceLabel(task);
-  if (label) {
-    const badge = document.createElement('span');
-    badge.className = 'recurrence-badge';
-    badge.textContent = label;
-    li.appendChild(badge);
+  if (task.isProject) {
+    // Project: expand arrow instead of checkbox
+    const projArrow = document.createElement('button');
+    projArrow.className = 'project-expand-arrow';
+    projArrow.setAttribute('aria-label', 'Expand project');
+    projArrow.textContent = '\u25B6';
+    li.appendChild(projArrow);
+
+    // Two-row layout: title + progress bar
+    const contentCol = document.createElement('div');
+    contentCol.className = 'project-content';
+
+    const titleRow = document.createElement('div');
+    titleRow.className = 'project-title-row';
+    const title = document.createElement('span');
+    title.className = 'task-title';
+    title.textContent = task.title;
+    titleRow.appendChild(title);
+
+    const progress = getSubtaskProgress(task.id);
+    const progressEl = document.createElement('span');
+    progressEl.className = 'project-progress';
+    const bar = document.createElement('span');
+    bar.className = 'progress-bar';
+    const fill = document.createElement('span');
+    fill.className = 'progress-bar-fill';
+    fill.style.width = (progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0) + '%';
+    bar.appendChild(fill);
+    const ptext = document.createElement('span');
+    ptext.className = 'progress-text';
+    ptext.textContent = progress.done + '/' + progress.total;
+    progressEl.appendChild(bar);
+    progressEl.appendChild(ptext);
+    titleRow.appendChild(progressEl);
+    contentCol.appendChild(titleRow);
+
+    const metaRow = document.createElement('div');
+    metaRow.className = 'project-meta-row';
+    const dueInfo = formatDueDate(task.dueDate, todayStr);
+    if (dueInfo) {
+      const dueBadge = document.createElement('span');
+      dueBadge.className = 'due-badge ' + dueInfo.cls;
+      dueBadge.textContent = dueInfo.text;
+      metaRow.appendChild(dueBadge);
+    }
+    if (task.notes) {
+      const notesBtn = document.createElement('button');
+      notesBtn.className = 'notes-icon';
+      notesBtn.setAttribute('aria-label', 'Toggle notes');
+      notesBtn.textContent = '\uD83D\uDCDD';
+      notesBtn.dataset.id = task.id;
+      metaRow.appendChild(notesBtn);
+    }
+    if (metaRow.children.length > 0) contentCol.appendChild(metaRow);
+    li.appendChild(contentCol);
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'task-edit-btn';
+    editBtn.setAttribute('aria-label', 'Edit task');
+    editBtn.textContent = '\u270E';
+    li.appendChild(editBtn);
+  } else {
+    // Regular task or subtask
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.className = 'task-check';
+    check.setAttribute('aria-label', 'Complete ' + task.title);
+    li.appendChild(check);
+
+    const title = document.createElement('span');
+    title.className = 'task-title';
+    title.textContent = task.title;
+    li.appendChild(title);
+
+    const label = getRecurrenceLabel(task);
+    if (label) {
+      const badge = document.createElement('span');
+      badge.className = 'recurrence-badge';
+      badge.textContent = label;
+      li.appendChild(badge);
+    }
+
+    const dueInfo = formatDueDate(task.dueDate, todayStr);
+    if (dueInfo) {
+      const dueBadge = document.createElement('span');
+      dueBadge.className = 'due-badge ' + dueInfo.cls;
+      dueBadge.textContent = dueInfo.text;
+      li.appendChild(dueBadge);
+    }
+
+    if (task.notes) {
+      const notesBtn = document.createElement('button');
+      notesBtn.className = 'notes-icon';
+      notesBtn.setAttribute('aria-label', 'Toggle notes');
+      notesBtn.textContent = '\uD83D\uDCDD';
+      notesBtn.dataset.id = task.id;
+      li.appendChild(notesBtn);
+    }
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'task-edit-btn';
+    editBtn.setAttribute('aria-label', 'Edit task');
+    editBtn.textContent = '\u270E';
+    li.appendChild(editBtn);
   }
-
-  const dueInfo = formatDueDate(task.dueDate, todayStr);
-  if (dueInfo) {
-    const dueBadge = document.createElement('span');
-    dueBadge.className = 'due-badge ' + dueInfo.cls;
-    dueBadge.textContent = dueInfo.text;
-    li.appendChild(dueBadge);
-  }
-
-  if (task.notes) {
-    const notesBtn = document.createElement('button');
-    notesBtn.className = 'notes-icon';
-    notesBtn.setAttribute('aria-label', 'Toggle notes');
-    notesBtn.textContent = '\uD83D\uDCDD';
-    notesBtn.dataset.id = task.id;
-    li.appendChild(notesBtn);
-  }
-
-  const editBtn = document.createElement('button');
-  editBtn.className = 'task-edit-btn';
-  editBtn.setAttribute('aria-label', 'Edit task');
-  editBtn.textContent = '\u270E';
-  li.appendChild(editBtn);
 
   wrapper.appendChild(li);
 
