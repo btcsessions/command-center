@@ -6,6 +6,7 @@ import { initGlobalDrag } from './utils/drag.js';
 import { initSync } from './sync.js';
 import { api } from './api.js';
 import { getTodayStr } from './utils/dates.js';
+import { initHabits, renderHabits } from './components/habits.js';
 
 // --- Event Delegation ---
 function initEventDelegation() {
@@ -217,10 +218,12 @@ function initPWAUpdate() {
 async function init() {
   await initialLoad();
   render();
+  renderHabits();
   startMidnightChecker();
   initEventDelegation();
   initModalEvents();
   initCatModalEvents();
+  initHabits();
   initGlobalDrag();
   initBackup();
   initPWAUpdate();
