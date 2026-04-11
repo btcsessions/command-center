@@ -261,6 +261,50 @@ export async function reorderCategory(category, orderedIds) {
   await queueOperation({ type: 'reorder', category, orderedIds });
 }
 
+export function moveTask(taskId, destCategory, destProjectId) {
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+
+  // Don't allow moving a project into another project
+  if (task.isProject && destProjectId) return;
+
+  // Remove from old parent's subtaskOrder if it was a subtask
+  if (task.parentId) {
+    const oldParent = tasks.find(t => t.id === task.parentId);
+    if (oldParent) {
+      oldParent.subtaskOrder = oldParent.subtaskOrder.filter(sid => sid !== taskId);
+    }
+  }
+
+  const oldCategory = task.category;
+
+  if (destProjectId) {
+    // Moving into a project as subtask
+    const destProject = tasks.find(t => t.id === destProjectId);
+    if (!destProject) return;
+    task.parentId = destProjectId;
+    task.category = destProject.category;
+    if (destProject.subtaskOrder.indexOf(taskId) === -1) {
+      destProject.subtaskOrder.push(taskId);
+    }
+  } else {
+    // Moving to top-level in a category
+    task.parentId = null;
+    task.category = destCategory;
+    task.sortOrder = nextSortOrder(destCategory);
+  }
+
+  // Move subtasks to new category if moving a project across categories
+  if (task.isProject && task.category !== oldCategory) {
+    tasks.forEach(t => {
+      if (t.parentId === taskId) t.category = task.category;
+    });
+  }
+
+  db.putTask(task);
+  queueOperation({ type: 'update', taskId, updates: { category: task.category, parentId: task.parentId, sortOrder: task.sortOrder } });
+}
+
 export async function reorderSubtasks(projectId, orderedIds) {
   const project = tasks.find(t => t.id === projectId);
   if (project) {

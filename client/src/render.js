@@ -1,7 +1,6 @@
-import { getCategories, URGENCY_COLORS, expandedCategories, expandedNotes, expandedProjects, getVisibleTasks, getVisibleSubtasks, getSubtaskProgress, reorderCategory } from './state.js';
+import { getCategories, URGENCY_COLORS, expandedCategories, expandedNotes, expandedProjects, getVisibleTasks, getVisibleSubtasks, getSubtaskProgress } from './state.js';
 import { getTodayStr, formatDateDisplay, getRecurrenceLabel, formatDueDate } from './utils/dates.js';
 import { linkifyText } from './utils/linkify.js';
-import { initDragDesktop, initDragTouch } from './utils/drag.js';
 
 let lastDateStr = '';
 
@@ -72,8 +71,14 @@ export function render() {
     catEditBtn.textContent = '\u22EF';
     catEditBtn.setAttribute('aria-label', 'Edit category');
 
+    const catDragHandle = document.createElement('span');
+    catDragHandle.className = 'cat-drag-handle';
+    catDragHandle.textContent = '\u2630';
+    catDragHandle.setAttribute('aria-label', 'Drag to reorder category');
+
     const headerTop = document.createElement('div');
     headerTop.className = 'category-header-top';
+    headerTop.appendChild(catDragHandle);
     headerTop.appendChild(icon);
     headerTop.appendChild(name);
     headerTop.appendChild(catEditBtn);
@@ -134,9 +139,6 @@ export function render() {
     section.appendChild(header);
     section.appendChild(body);
     app.appendChild(section);
-
-    initDragDesktop(list, getVisibleTasks, reorderCategory, render);
-    initDragTouch(list, getVisibleTasks, reorderCategory, render);
   });
 
   // Add category card

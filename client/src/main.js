@@ -2,6 +2,7 @@ import './styles/main.css';
 import { initialLoad, completeTask, expandedCategories, expandedNotes, expandedProjects, getTasks } from './state.js';
 import { render, startMidnightChecker, updateSyncIndicator } from './render.js';
 import { openModal, closeModal, initModalEvents, openCatModal, initCatModalEvents } from './components/modal.js';
+import { initGlobalDrag } from './utils/drag.js';
 import { initSync } from './sync.js';
 import { api } from './api.js';
 import { getTodayStr } from './utils/dates.js';
@@ -9,7 +10,8 @@ import { getTodayStr } from './utils/dates.js';
 // --- Event Delegation ---
 function initEventDelegation() {
   document.getElementById('app').addEventListener('click', e => {
-    // Expand/collapse
+    // Expand/collapse (but not when clicking drag handle)
+    if (e.target.closest('.cat-drag-handle')) return;
     const header = e.target.closest('.category-header');
     if (header) {
       const cat = header.closest('.category').dataset.category;
@@ -192,6 +194,7 @@ async function init() {
   initEventDelegation();
   initModalEvents();
   initCatModalEvents();
+  initGlobalDrag();
   initBackup();
   initPWAUpdate();
 
