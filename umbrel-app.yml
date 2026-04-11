@@ -1,0 +1,20 @@
+manifestVersion: 1
+id: next-action
+name: Next Action
+tagline: Task management with recurring tasks and cross-device sync
+category: productivity
+version: "1.0.0"
+port: 3050
+description: >
+  A personal task manager with categories, recurring tasks, urgency levels,
+  due dates, and seamless sync across all your devices. Offline-first PWA
+  that works on Mac, Android, and Linux.
+developer: BTC Sessions
+website: ""
+submitter: self
+submission: ""
+repo: ""
+support: ""
+gallery: []
+dependencies: []
+path: ""

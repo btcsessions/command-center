@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#0f172a">
+<title>Next Action</title>
+</head>
+<body>
+
+<header>
+  <h1>Next Action</h1>
+  <div class="date" id="today-date"></div>
+  <div class="header-row">
+    <span class="sync-dot offline" id="sync-indicator" title="Sync status"></span>
+    <button class="backup-btn" id="btn-export">Export Backup</button>
+    <button class="backup-btn" id="btn-import">Import Backup</button>
+    <input type="file" id="import-file" accept=".json" class="hidden">
+  </div>
+</header>
+
+<main id="app"></main>
+
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal-content">
+    <h2 class="modal-title" id="modal-title">Add Task</h2>
+    <form id="task-form">
+      <div class="form-group">
+        <label for="input-title">Task</label>
+        <input type="text" id="input-title" class="form-input" placeholder="What needs to be done?" required autocomplete="off">
+      </div>
+      <div class="form-group" id="category-group">
+        <label for="input-category">Category</label>
+        <select id="input-category" class="form-select">
+          <option value="fitness">Fitness</option>
+          <option value="work">Work</option>
+          <option value="personal">Personal Errands</option>
+          <option value="education">Education</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="input-recurrence">Recurrence</label>
+        <select id="input-recurrence" class="form-select">
+          <option value="none">One-time</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="custom">Every N days</option>
+        </select>
+      </div>
+      <div class="form-group hidden" id="weekly-group">
+        <label>Days</label>
+        <div class="day-toggles" id="day-toggles">
+          <button type="button" class="day-toggle" data-day="0">Su</button>
+          <button type="button" class="day-toggle" data-day="1">Mo</button>
+          <button type="button" class="day-toggle" data-day="2">Tu</button>
+          <button type="button" class="day-toggle" data-day="3">We</button>
+          <button type="button" class="day-toggle" data-day="4">Th</button>
+          <button type="button" class="day-toggle" data-day="5">Fr</button>
+          <button type="button" class="day-toggle" data-day="6">Sa</button>
+        </div>
+      </div>
+      <div class="form-group hidden" id="custom-group">
+        <label for="input-interval">Every how many days?</label>
+        <input type="number" id="input-interval" class="form-input" min="2" max="365" value="2">
+      </div>
+      <div class="form-group">
+        <label>Urgency</label>
+        <div class="urgency-toggles" id="urgency-toggles">
+          <button type="button" class="urgency-btn" data-urgency="low">Low</button>
+          <button type="button" class="urgency-btn active" data-urgency="medium">Medium</button>
+          <button type="button" class="urgency-btn" data-urgency="high">High</button>
+          <button type="button" class="urgency-btn" data-urgency="critical">Critical</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="input-due-date">Due Date (optional)</label>
+        <input type="date" id="input-due-date" class="form-input">
+      </div>
+      <div class="form-group">
+        <label for="input-notes">Notes (optional)</label>
+        <textarea id="input-notes" class="form-input" rows="3" placeholder="Add notes or links..."></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="btn-cancel">Cancel</button>
+        <button type="button" class="btn btn-danger hidden" id="btn-delete">Delete</button>
+        <button type="submit" class="btn btn-primary" id="btn-save">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

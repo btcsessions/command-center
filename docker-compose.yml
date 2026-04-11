@@ -1,0 +1,15 @@
+services:
+  next-action:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3050}:3000"
+    volumes:
+      - data:/app/data
+    environment:
+      - AUTH_TOKEN=${AUTH_TOKEN:-}
+      - NODE_ENV=production
+      - DATA_DIR=/app/data
+
+volumes:
+  data:
