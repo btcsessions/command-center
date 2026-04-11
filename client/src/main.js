@@ -7,6 +7,7 @@ import { initSync } from './sync.js';
 import { api } from './api.js';
 import { getTodayStr } from './utils/dates.js';
 import { initHabits, renderHabits } from './components/habits.js';
+import { initCalendar } from './components/calendar.js';
 
 // --- Event Delegation ---
 function initEventDelegation() {
@@ -224,6 +225,7 @@ async function init() {
   initModalEvents();
   initCatModalEvents();
   initHabits();
+  initCalendar();
   initGlobalDrag();
   initBackup();
   initPWAUpdate();

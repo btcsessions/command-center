@@ -1,5 +1,6 @@
 import { createTask, updateTask, deleteTask, expandedCategories, expandedProjects, editingTaskId, setEditingTaskId, modalParentId, setModalParentId, getTasks, getCategories, addCategory, updateCategoryById, deleteCategoryById, CATEGORY_COLORS, CATEGORY_EMOJIS } from '../state.js';
 import { render } from '../render.js';
+import { setCalendarDate } from './calendar.js';
 
 let editingCatId = null;
 
@@ -87,7 +88,7 @@ export function openModal(mode, task, defaultCategory, parentId) {
   clearDayToggles();
   setActiveUrgency('medium');
   setActiveType('task');
-  document.getElementById('input-due-date').value = '';
+  setCalendarDate(null);
   document.getElementById('input-notes').value = '';
 
   if (parentId) {
@@ -112,7 +113,7 @@ export function openModal(mode, task, defaultCategory, parentId) {
     document.getElementById('input-title').value = task.title;
     document.getElementById('input-category').value = task.category;
     setActiveUrgency(task.urgency || 'medium');
-    document.getElementById('input-due-date').value = task.dueDate || '';
+    setCalendarDate(task.dueDate || null);
     document.getElementById('input-notes').value = task.notes || '';
     if (task.isProject) {
       setActiveType('project');

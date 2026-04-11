@@ -85,8 +85,22 @@
         </div>
       </div>
       <div class="form-group">
-        <label for="input-due-date">Due Date (optional)</label>
-        <input type="date" id="input-due-date" class="form-input">
+        <label>Due Date (optional)</label>
+        <div class="cal-wrap" id="cal-wrap">
+          <div class="cal-display" id="cal-display" tabindex="0">
+            <span class="cal-display-text empty" id="cal-display-text">Select a date</span>
+            <button type="button" class="cal-clear hidden" id="cal-clear" title="Clear date">&times;</button>
+          </div>
+          <input type="hidden" id="input-due-date">
+          <div class="cal-dropdown" id="cal-dropdown">
+            <div class="cal-nav">
+              <button type="button" class="cal-nav-btn" id="cal-prev">&#x25C0;</button>
+              <span class="cal-month" id="cal-month"></span>
+              <button type="button" class="cal-nav-btn" id="cal-next">&#x25B6;</button>
+            </div>
+            <div class="cal-grid" id="cal-grid"></div>
+          </div>
+        </div>
       </div>
       <div class="form-group">
         <label for="input-notes">Notes (optional)</label>

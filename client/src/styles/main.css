@@ -887,3 +887,62 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   transition: border-color 0.15s, color 0.15s;
 }
 .habit-add-card:hover { border-color: rgba(0, 212, 170, 0.4); color: #00d4aa; }
+
+/* Calendar picker */
+.cal-wrap { position: relative; }
+.cal-display {
+  width: 100%; padding: 10px 12px;
+  background: rgba(10, 20, 16, 0.8);
+  border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text);
+  font-size: 1rem; font-family: inherit;
+  cursor: pointer; outline: none;
+  transition: border-color 0.15s;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.cal-display:focus { border-color: #00d4aa; box-shadow: 0 0 0 2px var(--glow); }
+.cal-display-text { color: var(--text); }
+.cal-display-text.empty { color: var(--text-muted); }
+.cal-clear { background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; padding: 0 4px; line-height: 1; }
+.cal-clear:hover { color: var(--danger); }
+.cal-dropdown {
+  display: none; position: absolute; z-index: 100;
+  top: calc(100% + 4px); left: 0; right: 0;
+  background: rgba(10, 20, 16, 0.97);
+  border: 1px solid rgba(0, 212, 170, 0.3);
+  border-radius: 10px; padding: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+.cal-dropdown.open { display: block; }
+.cal-nav {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 8px;
+}
+.cal-nav-btn {
+  background: none; border: none; color: var(--text-muted);
+  font-size: 1.1rem; cursor: pointer; padding: 4px 8px;
+  border-radius: 6px; transition: background 0.15s, color 0.15s;
+}
+.cal-nav-btn:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+.cal-month {
+  font-size: 0.85rem; font-weight: 600; color: var(--text);
+  text-align: center;
+}
+.cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+  text-align: center;
+}
+.cal-dow {
+  font-size: 0.6rem; font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; padding: 4px 0;
+}
+.cal-day {
+  background: none; border: none; color: var(--text);
+  font-size: 0.8rem; padding: 6px 0; cursor: pointer;
+  border-radius: 6px; transition: background 0.12s;
+  font-family: inherit;
+}
+.cal-day:hover { background: rgba(0, 212, 170, 0.15); }
+.cal-day.today { color: #00d4aa; font-weight: 700; }
+.cal-day.selected { background: #00d4aa; color: #0a1410; font-weight: 700; }
+.cal-day.other-month { color: var(--text-muted); opacity: 0.4; }
