@@ -5,6 +5,9 @@ import { initDragDesktop, initDragTouch } from './utils/drag.js';
 
 let lastDateStr = '';
 
+// Category colors (until dynamic categories are added in Phase 2)
+const CAT_COLORS = { fitness: '#22c55e', work: '#00d4aa', personal: '#f59e0b', education: '#a78bfa' };
+
 export function render() {
   const app = document.getElementById('app');
   app.textContent = '';
@@ -16,6 +19,7 @@ export function render() {
     const section = document.createElement('section');
     section.className = 'category' + (expandedCategories.has(cat.id) ? ' expanded' : '');
     section.dataset.category = cat.id;
+    section.style.setProperty('--cat-color', CAT_COLORS[cat.id] || '#00d4aa');
 
     const visible = getVisibleTasks(cat.id);
     const nextTask = visible[0] || null;
@@ -51,10 +55,13 @@ export function render() {
     arrow.className = 'expand-arrow';
     arrow.textContent = '\u25BC';
 
-    header.appendChild(icon);
-    header.appendChild(name);
+    const headerTop = document.createElement('div');
+    headerTop.className = 'category-header-top';
+    headerTop.appendChild(icon);
+    headerTop.appendChild(name);
+    headerTop.appendChild(arrow);
+    header.appendChild(headerTop);
     header.appendChild(preview);
-    header.appendChild(arrow);
 
     // Body
     const body = document.createElement('div');

@@ -5,18 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="theme-color" content="#0f172a">
-<title>Next Action</title>
+<meta name="theme-color" content="#0a1410">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+<title>Command Center</title>
 </head>
 <body>
 
 <header>
-  <h1>Next Action</h1>
+  <h1>Command Center</h1>
   <div class="date" id="today-date"></div>
   <div class="header-row">
     <span class="sync-dot offline" id="sync-indicator" title="Sync status"></span>
-    <button class="backup-btn" id="btn-export">Export Backup</button>
-    <button class="backup-btn" id="btn-import">Import Backup</button>
+    <button class="backup-btn" id="btn-export" title="Export Backup">&#x2B07;</button>
+    <button class="backup-btn" id="btn-import" title="Import Backup">&#x2B06;</button>
     <input type="file" id="import-file" accept=".json" class="hidden">
   </div>
 </header>

@@ -11,7 +11,7 @@ export const CATEGORIES = [
 ];
 
 const URGENCY_WEIGHTS = { critical: 0, high: 1, medium: 2, low: 3 };
-export const URGENCY_COLORS = { low: '#64748b', medium: '#3b82f6', high: '#f59e0b', critical: '#ef4444' };
+export const URGENCY_COLORS = { low: '#64748b', medium: '#00d4aa', high: '#f59e0b', critical: '#f43f5e' };
 
 // In-memory state
 let tasks = [];
