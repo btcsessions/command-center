@@ -1,5 +1,5 @@
 import './styles/main.css';
-import { initialLoad, completeTask, expandedCategories, expandedNotes, expandedProjects, getTasks } from './state.js';
+import { initialLoad, completeTask, expandedCategories, expandedNotes, expandedProjects, getTasks, setNextActionIndex, nextActionIndex } from './state.js';
 import { render, startMidnightChecker, updateSyncIndicator } from './render.js';
 import { openModal, closeModal, initModalEvents, openCatModal, initCatModalEvents } from './components/modal.js';
 import { initGlobalDrag } from './utils/drag.js';
@@ -104,6 +104,30 @@ function initEventDelegation() {
     const addBtn = e.target.closest('.add-task-btn');
     if (addBtn) {
       openModal('add', null, addBtn.dataset.category);
+      return;
+    }
+  });
+
+  // Next Action Bar
+  document.getElementById('next-action-bar').addEventListener('click', e => {
+    const check = e.target.closest('.next-action-bar-check');
+    if (check) {
+      const taskId = check.dataset.id;
+      if (taskId) {
+        completeTask(taskId);
+        setNextActionIndex(0);
+        render();
+      }
+      return;
+    }
+    const arrow = e.target.closest('.next-action-bar-arrow');
+    if (arrow && !arrow.disabled) {
+      if (arrow.dataset.dir === 'prev' && nextActionIndex > 0) {
+        setNextActionIndex(nextActionIndex - 1);
+      } else if (arrow.dataset.dir === 'next') {
+        setNextActionIndex(nextActionIndex + 1);
+      }
+      render();
       return;
     }
   });

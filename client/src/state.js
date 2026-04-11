@@ -261,6 +261,56 @@ export async function reorderCategory(category, orderedIds) {
   await queueOperation({ type: 'reorder', category, orderedIds });
 }
 
+export let nextActionIndex = 0;
+export function setNextActionIndex(i) { nextActionIndex = i; }
+
+export function getRankedActions() {
+  const todayStr = getTodayStr();
+  const candidates = tasks.filter(t => !t.isProject && isTaskVisible(t, todayStr));
+  if (candidates.length === 0) return [];
+
+  const workCat = categories.find(c => c.id === 'work');
+  const workId = workCat ? workCat.id : null;
+
+  candidates.sort((a, b) => {
+    // 1. Overdue work items first
+    const aOverdueWork = (a.category === workId && a.dueDate && a.dueDate < todayStr) ? 0 : 1;
+    const bOverdueWork = (b.category === workId && b.dueDate && b.dueDate < todayStr) ? 0 : 1;
+    if (aOverdueWork !== bOverdueWork) return aOverdueWork - bOverdueWork;
+    // 2. Any overdue items
+    const aOverdue = (a.dueDate && a.dueDate < todayStr) ? 0 : 1;
+    const bOverdue = (b.dueDate && b.dueDate < todayStr) ? 0 : 1;
+    if (aOverdue !== bOverdue) return aOverdue - bOverdue;
+    // 3. Work tasks before others
+    const aWork = a.category === workId ? 0 : 1;
+    const bWork = b.category === workId ? 0 : 1;
+    if (aWork !== bWork) return aWork - bWork;
+    // 4. Highest urgency
+    const ua = getUrgencyWeight(a, todayStr);
+    const ub = getUrgencyWeight(b, todayStr);
+    if (ua !== ub) return ua - ub;
+    // 5. Soonest due date
+    const aDue = a.dueDate || '';
+    const bDue = b.dueDate || '';
+    if (aDue || bDue) {
+      if (aDue && !bDue) return -1;
+      if (!aDue && bDue) return 1;
+      if (aDue < bDue) return -1;
+      if (aDue > bDue) return 1;
+    }
+    // 6. Manual sort order
+    return a.sortOrder - b.sortOrder;
+  });
+
+  return candidates.map(t => {
+    let parentProject = null;
+    if (t.parentId) {
+      parentProject = tasks.find(p => p.id === t.parentId) || null;
+    }
+    return { task: t, parentProject };
+  });
+}
+
 export function moveTask(taskId, destCategory, destProjectId) {
   const task = tasks.find(t => t.id === taskId);
   if (!task) return;

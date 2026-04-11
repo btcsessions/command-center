@@ -1,4 +1,4 @@
-import { getCategories, URGENCY_COLORS, expandedCategories, expandedNotes, expandedProjects, getVisibleTasks, getVisibleSubtasks, getSubtaskProgress } from './state.js';
+import { getCategories, URGENCY_COLORS, expandedCategories, expandedNotes, expandedProjects, getVisibleTasks, getVisibleSubtasks, getSubtaskProgress, getRankedActions, nextActionIndex } from './state.js';
 import { getTodayStr, formatDateDisplay, getRecurrenceLabel, formatDueDate } from './utils/dates.js';
 import { linkifyText } from './utils/linkify.js';
 
@@ -10,6 +10,93 @@ export function render() {
   const todayStr = getTodayStr();
   document.getElementById('today-date').textContent = formatDateDisplay(todayStr);
   lastDateStr = todayStr;
+
+  // Next Action Bar
+  const bar = document.getElementById('next-action-bar');
+  bar.textContent = '';
+  bar.classList.remove('visible');
+  const ranked = getRankedActions();
+  let naIdx = nextActionIndex;
+  if (naIdx >= ranked.length) naIdx = 0;
+  if (ranked.length > 0) {
+    const current = ranked[naIdx];
+    const t = current.task;
+
+    const barLabel = document.createElement('span');
+    barLabel.className = 'next-action-bar-label';
+    barLabel.textContent = 'Next';
+    bar.appendChild(barLabel);
+
+    const barDot = document.createElement('span');
+    barDot.className = 'urgency-dot ' + (t.urgency || 'medium');
+    bar.appendChild(barDot);
+
+    const barCheck = document.createElement('input');
+    barCheck.type = 'checkbox';
+    barCheck.className = 'next-action-bar-check';
+    barCheck.dataset.id = t.id;
+    barCheck.setAttribute('aria-label', 'Complete ' + t.title);
+    bar.appendChild(barCheck);
+
+    if (current.parentProject) {
+      const barProj = document.createElement('span');
+      barProj.className = 'next-action-bar-project';
+      barProj.textContent = current.parentProject.title + ':';
+      bar.appendChild(barProj);
+    }
+
+    const barTitle = document.createElement('span');
+    barTitle.className = 'next-action-bar-title';
+    barTitle.textContent = t.title;
+    bar.appendChild(barTitle);
+
+    const dueInfo = formatDueDate(t.dueDate, todayStr);
+    if (dueInfo) {
+      const barDue = document.createElement('span');
+      barDue.className = 'due-badge ' + dueInfo.cls;
+      barDue.textContent = dueInfo.text;
+      bar.appendChild(barDue);
+    }
+
+    const allCats = getCategories();
+    const barCatObj = allCats.find(c => c.id === t.category);
+    if (barCatObj) {
+      const barCat = document.createElement('span');
+      barCat.className = 'next-action-bar-cat';
+      barCat.textContent = barCatObj.icon;
+      bar.appendChild(barCat);
+    }
+
+    if (ranked.length > 1) {
+      const nav = document.createElement('span');
+      nav.className = 'next-action-bar-nav';
+
+      const prevBtn = document.createElement('button');
+      prevBtn.className = 'next-action-bar-arrow';
+      prevBtn.setAttribute('aria-label', 'Previous task');
+      prevBtn.textContent = '\u25C0';
+      prevBtn.dataset.dir = 'prev';
+      if (naIdx === 0) prevBtn.disabled = true;
+      nav.appendChild(prevBtn);
+
+      const pos = document.createElement('span');
+      pos.className = 'next-action-bar-pos';
+      pos.textContent = (naIdx + 1) + '/' + ranked.length;
+      nav.appendChild(pos);
+
+      const nextBtn = document.createElement('button');
+      nextBtn.className = 'next-action-bar-arrow';
+      nextBtn.setAttribute('aria-label', 'Next task');
+      nextBtn.textContent = '\u25B6';
+      nextBtn.dataset.dir = 'next';
+      if (naIdx === ranked.length - 1) nextBtn.disabled = true;
+      nav.appendChild(nextBtn);
+
+      bar.appendChild(nav);
+    }
+
+    bar.classList.add('visible');
+  }
 
   const categories = getCategories();
 
