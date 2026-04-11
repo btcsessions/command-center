@@ -144,6 +144,46 @@ header .date {
   }
 }
 
+/* Add category card */
+.add-category-card {
+  min-width: 200px;
+  flex: 0 0 200px;
+  scroll-snap-align: start;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  gap: 8px;
+  padding: 14px 16px;
+  box-sizing: border-box;
+}
+@media (max-width: 639px) {
+  .add-category-card {
+    min-width: 0;
+    max-width: 100%;
+    flex: 0 0 auto;
+    width: 100%;
+  }
+}
+.add-category-card:hover {
+  background: var(--surface-hover);
+  border-color: #00d4aa;
+  color: var(--text);
+}
+
+/* Category edit button */
+.cat-edit-btn {
+  background: none; border: none; color: var(--text-muted); cursor: pointer;
+  font-size: 0.85rem; padding: 4px 6px; border-radius: 4px; flex-shrink: 0;
+  transition: background 0.15s, color 0.15s; line-height: 1;
+}
+.cat-edit-btn:hover { background: var(--surface-hover); color: var(--text); }
+
 .category-header {
   display: flex;
   flex-direction: column;
@@ -556,3 +596,23 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; 
   box-shadow: 0 4px 16px rgba(0,0,0,0.3);
   animation: slideUp 0.3s ease;
 }
+
+/* Color swatches for category editor */
+.color-swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+.color-swatch {
+  width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent;
+  cursor: pointer; transition: border-color 0.15s, transform 0.15s;
+}
+.color-swatch:hover { transform: scale(1.15); }
+.color-swatch.active { border-color: var(--text); }
+
+/* Emoji picker */
+.emoji-picker { display: flex; gap: 6px; flex-wrap: wrap; }
+.emoji-option {
+  width: 36px; height: 36px; border-radius: 8px; border: 2px solid transparent;
+  background: rgba(255,255,255,0.05); cursor: pointer; font-size: 1.2rem;
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color 0.15s, transform 0.15s, background 0.15s;
+}
+.emoji-option:hover { transform: scale(1.15); background: rgba(255,255,255,0.1); }
+.emoji-option.active { border-color: var(--text); background: rgba(255,255,255,0.12); }

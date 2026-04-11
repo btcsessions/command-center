@@ -1,7 +1,7 @@
 import './styles/main.css';
 import { initialLoad, completeTask, expandedCategories, expandedNotes, getTasks } from './state.js';
 import { render, startMidnightChecker, updateSyncIndicator } from './render.js';
-import { openModal, closeModal, initModalEvents } from './components/modal.js';
+import { openModal, closeModal, initModalEvents, openCatModal, initCatModalEvents } from './components/modal.js';
 import { initSync } from './sync.js';
 import { api } from './api.js';
 import { getTodayStr } from './utils/dates.js';
@@ -57,6 +57,21 @@ function initEventDelegation() {
       const tasks = getTasks();
       const task = tasks.find(t => t.id === item.dataset.id);
       if (task) openModal('edit', task);
+      return;
+    }
+
+    // Edit category
+    const catEditBtn = e.target.closest('.cat-edit-btn');
+    if (catEditBtn) {
+      e.stopPropagation();
+      openCatModal('edit', catEditBtn.dataset.catId);
+      return;
+    }
+
+    // Add category
+    const addCatBtn = e.target.closest('.add-category-card');
+    if (addCatBtn) {
+      openCatModal('add');
       return;
     }
 
@@ -153,6 +168,7 @@ async function init() {
   startMidnightChecker();
   initEventDelegation();
   initModalEvents();
+  initCatModalEvents();
   initBackup();
   initPWAUpdate();
 

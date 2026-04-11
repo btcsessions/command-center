@@ -1,12 +1,9 @@
-import { CATEGORIES, URGENCY_COLORS, expandedCategories, expandedNotes, getVisibleTasks, reorderCategory } from './state.js';
+import { getCategories, URGENCY_COLORS, expandedCategories, expandedNotes, getVisibleTasks, reorderCategory } from './state.js';
 import { getTodayStr, formatDateDisplay, getRecurrenceLabel, formatDueDate } from './utils/dates.js';
 import { linkifyText } from './utils/linkify.js';
 import { initDragDesktop, initDragTouch } from './utils/drag.js';
 
 let lastDateStr = '';
-
-// Category colors (until dynamic categories are added in Phase 2)
-const CAT_COLORS = { fitness: '#22c55e', work: '#00d4aa', personal: '#f59e0b', education: '#a78bfa' };
 
 export function render() {
   const app = document.getElementById('app');
@@ -15,11 +12,25 @@ export function render() {
   document.getElementById('today-date').textContent = formatDateDisplay(todayStr);
   lastDateStr = todayStr;
 
-  CATEGORIES.forEach(cat => {
+  const categories = getCategories();
+
+  // Populate category select in task modal
+  const catSelect = document.getElementById('input-category');
+  if (catSelect) {
+    catSelect.textContent = '';
+    categories.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.name;
+      catSelect.appendChild(opt);
+    });
+  }
+
+  categories.forEach(cat => {
     const section = document.createElement('section');
     section.className = 'category' + (expandedCategories.has(cat.id) ? ' expanded' : '');
     section.dataset.category = cat.id;
-    section.style.setProperty('--cat-color', CAT_COLORS[cat.id] || '#00d4aa');
+    section.style.setProperty('--cat-color', cat.color);
 
     const visible = getVisibleTasks(cat.id);
     const nextTask = visible[0] || null;
@@ -55,10 +66,17 @@ export function render() {
     arrow.className = 'expand-arrow';
     arrow.textContent = '\u25BC';
 
+    const catEditBtn = document.createElement('button');
+    catEditBtn.className = 'cat-edit-btn';
+    catEditBtn.dataset.catId = cat.id;
+    catEditBtn.textContent = '\u22EF';
+    catEditBtn.setAttribute('aria-label', 'Edit category');
+
     const headerTop = document.createElement('div');
     headerTop.className = 'category-header-top';
     headerTop.appendChild(icon);
     headerTop.appendChild(name);
+    headerTop.appendChild(catEditBtn);
     headerTop.appendChild(arrow);
     header.appendChild(headerTop);
     header.appendChild(preview);
@@ -96,6 +114,13 @@ export function render() {
     initDragDesktop(list, getVisibleTasks, reorderCategory, render);
     initDragTouch(list, getVisibleTasks, reorderCategory, render);
   });
+
+  // Add category card
+  const addCatCard = document.createElement('div');
+  addCatCard.className = 'add-category-card';
+  addCatCard.id = 'add-category-btn';
+  addCatCard.textContent = '+ Category';
+  app.appendChild(addCatCard);
 }
 
 function renderTaskItem(task, isFirst, todayStr) {

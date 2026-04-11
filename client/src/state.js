@@ -3,12 +3,89 @@ import { api } from './api.js';
 import * as db from './db.js';
 import { queueOperation, doSync } from './sync.js';
 
-export const CATEGORIES = [
-  { id: 'fitness',   name: 'Fitness',          icon: '\uD83D\uDCAA' },
-  { id: 'work',      name: 'Work',             icon: '\uD83D\uDCBC' },
-  { id: 'personal',  name: 'Personal Errands', icon: '\uD83C\uDFE0' },
-  { id: 'education', name: 'Education',        icon: '\uD83D\uDCDA' }
+const CATEGORIES_KEY = 'commandcenter_categories';
+
+const DEFAULT_CATEGORIES = [
+  { id: 'fitness',   name: 'Fitness',          icon: '\uD83D\uDCAA', color: '#22c55e', sortOrder: 0 },
+  { id: 'work',      name: 'Work',             icon: '\uD83D\uDCBC', color: '#00d4aa', sortOrder: 1 },
+  { id: 'personal',  name: 'Personal Errands', icon: '\uD83C\uDFE0', color: '#38bdf8', sortOrder: 2 },
+  { id: 'education', name: 'Education',        icon: '\uD83D\uDCDA', color: '#a78bfa', sortOrder: 3 }
 ];
+
+export const CATEGORY_COLORS = [
+  '#22c55e', '#00d4aa', '#38bdf8', '#a78bfa', '#f59e0b',
+  '#ef4444', '#ec4899', '#8b5cf6', '#06b6d4', '#84cc16',
+  '#f97316', '#14b8a6', '#6366f1', '#e879f9', '#facc15'
+];
+
+export const CATEGORY_EMOJIS = [
+  '\uD83D\uDCAA', '\uD83D\uDCBC', '\uD83C\uDFE0', '\uD83D\uDCDA', '\uD83C\uDFAF', '\uD83C\uDFC3', '\uD83E\uDDD8', '\uD83C\uDFA8', '\uD83C\uDFB5', '\uD83C\uDFAE',
+  '\uD83D\uDCB0', '\uD83D\uDED2', '\uD83C\uDF73', '\uD83E\uDDF9', '\u2708\uFE0F', '\uD83C\uDFCB\uFE0F', '\u2764\uFE0F', '\uD83E\uDDE0', '\uD83D\uDCBB', '\uD83D\uDCF1',
+  '\uD83D\uDCDD', '\uD83D\uDD27', '\uD83C\uDF31', '\u2B50', '\uD83D\uDE80', '\uD83C\uDFAC', '\uD83D\uDCF7', '\uD83D\uDC3E', '\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67\u200D\uD83D\uDC66', '\uD83C\uDFE1',
+  '\uD83D\uDE97', '\uD83D\uDC8A', '\uD83D\uDCE6', '\uD83C\uDF81', '\uD83D\uDD14', '\uD83D\uDCC5', '\uD83D\uDDC2\uFE0F', '\uD83D\uDCC1', '\uD83C\uDFC6', '\uD83D\uDCA1'
+];
+
+let categories = [];
+
+function loadCategories() {
+  try {
+    const raw = localStorage.getItem(CATEGORIES_KEY);
+    categories = raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    categories = [];
+  }
+  if (categories.length === 0) {
+    categories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
+    saveCategories();
+  }
+  categories.sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+function saveCategories() {
+  localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
+}
+
+export function getCategories() { return categories; }
+
+export function addCategory(name, icon, color) {
+  const id = 'cat_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const maxOrder = categories.length > 0 ? Math.max(...categories.map(c => c.sortOrder)) : -1;
+  categories.push({ id, name: name.trim(), icon, color, sortOrder: maxOrder + 1 });
+  saveCategories();
+  return id;
+}
+
+export function updateCategoryById(id, updates) {
+  const cat = categories.find(c => c.id === id);
+  if (cat) {
+    Object.assign(cat, updates);
+    saveCategories();
+  }
+}
+
+export function deleteCategoryById(id) {
+  const catTasks = tasks.filter(t => t.category === id);
+  if (catTasks.length > 0) {
+    if (!confirm('This category has ' + catTasks.length + ' task(s). Delete them too?')) return false;
+    catTasks.forEach(t => {
+      tasks = tasks.filter(tt => tt.id !== t.id);
+      db.deleteTaskLocal(t.id);
+      queueOperation({ type: 'delete', taskId: t.id });
+    });
+  }
+  categories = categories.filter(c => c.id !== id);
+  saveCategories();
+  return true;
+}
+
+export function reorderCategories(orderedIds) {
+  orderedIds.forEach((id, i) => {
+    const cat = categories.find(c => c.id === id);
+    if (cat) cat.sortOrder = i;
+  });
+  categories.sort((a, b) => a.sortOrder - b.sortOrder);
+  saveCategories();
+}
 
 const URGENCY_WEIGHTS = { critical: 0, high: 1, medium: 2, low: 3 };
 export const URGENCY_COLORS = { low: '#64748b', medium: '#00d4aa', high: '#f59e0b', critical: '#f43f5e' };
@@ -122,6 +199,7 @@ export async function reorderCategory(category, orderedIds) {
 
 // Initial data load: try server first, fall back to IndexedDB
 export async function initialLoad() {
+  loadCategories();
   try {
     if (navigator.onLine) {
       const serverTasks = await api.getTasks();

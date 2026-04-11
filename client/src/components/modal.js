@@ -1,5 +1,7 @@
-import { createTask, updateTask, deleteTask, expandedCategories, editingTaskId, setEditingTaskId, getTasks } from '../state.js';
+import { createTask, updateTask, deleteTask, expandedCategories, editingTaskId, setEditingTaskId, getTasks, getCategories, addCategory, updateCategoryById, deleteCategoryById, CATEGORY_COLORS, CATEGORY_EMOJIS } from '../state.js';
 import { render } from '../render.js';
+
+let editingCatId = null;
 
 function setActiveUrgency(level) {
   document.querySelectorAll('.urgency-btn').forEach(btn => {
@@ -140,7 +142,10 @@ export function initModalEvents() {
   });
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeModal();
+    if (e.key === 'Escape') {
+      closeModal();
+      closeCatModal();
+    }
   });
 
   document.getElementById('day-toggles').addEventListener('click', e => {
@@ -151,5 +156,106 @@ export function initModalEvents() {
   document.getElementById('urgency-toggles').addEventListener('click', e => {
     const btn = e.target.closest('.urgency-btn');
     if (btn) setActiveUrgency(btn.dataset.urgency);
+  });
+}
+
+// --- Category Modal ---
+
+export function openCatModal(mode, catId) {
+  editingCatId = (mode === 'edit') ? catId : null;
+  const overlay = document.getElementById('cat-modal-overlay');
+  const titleEl = document.getElementById('cat-modal-title');
+  const deleteBtn = document.getElementById('cat-btn-delete');
+
+  titleEl.textContent = mode === 'edit' ? 'Edit Category' : 'Add Category';
+  deleteBtn.classList.toggle('hidden', mode !== 'edit');
+
+  document.getElementById('cat-form').reset();
+
+  let selectedIcon = CATEGORY_EMOJIS[0];
+  let selectedColor = CATEGORY_COLORS[0];
+  if (mode === 'edit') {
+    const cat = getCategories().find(c => c.id === catId);
+    if (cat) {
+      document.getElementById('cat-input-name').value = cat.name;
+      selectedIcon = cat.icon;
+      selectedColor = cat.color;
+    }
+  }
+  document.getElementById('cat-input-icon').value = selectedIcon;
+
+  // Build emoji picker
+  const emojiContainer = document.getElementById('emoji-picker');
+  emojiContainer.textContent = '';
+  CATEGORY_EMOJIS.forEach(emoji => {
+    const em = document.createElement('span');
+    em.className = 'emoji-option' + (emoji === selectedIcon ? ' active' : '');
+    em.textContent = emoji;
+    em.dataset.emoji = emoji;
+    em.addEventListener('click', () => {
+      emojiContainer.querySelectorAll('.emoji-option').forEach(s => s.classList.remove('active'));
+      em.classList.add('active');
+      document.getElementById('cat-input-icon').value = emoji;
+    });
+    emojiContainer.appendChild(em);
+  });
+
+  // Build color swatches
+  const swatchContainer = document.getElementById('color-swatches');
+  swatchContainer.textContent = '';
+  CATEGORY_COLORS.forEach(color => {
+    const sw = document.createElement('span');
+    sw.className = 'color-swatch' + (color === selectedColor ? ' active' : '');
+    sw.style.background = color;
+    sw.dataset.color = color;
+    sw.addEventListener('click', () => {
+      swatchContainer.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+      sw.classList.add('active');
+    });
+    swatchContainer.appendChild(sw);
+  });
+
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => document.getElementById('cat-input-name').focus(), 100);
+}
+
+export function closeCatModal() {
+  document.getElementById('cat-modal-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+  editingCatId = null;
+}
+
+export function initCatModalEvents() {
+  document.getElementById('cat-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const name = document.getElementById('cat-input-name').value.trim();
+    if (!name) return;
+    const icon = document.getElementById('cat-input-icon').value.trim() || '\uD83D\uDCC1';
+    const activeSwatch = document.querySelector('.color-swatch.active');
+    const color = activeSwatch ? activeSwatch.dataset.color : CATEGORY_COLORS[0];
+
+    if (editingCatId) {
+      updateCategoryById(editingCatId, { name, icon, color });
+    } else {
+      addCategory(name, icon, color);
+    }
+    closeCatModal();
+    render();
+  });
+
+  document.getElementById('cat-btn-cancel').addEventListener('click', closeCatModal);
+
+  document.getElementById('cat-btn-delete').addEventListener('click', () => {
+    if (editingCatId) {
+      if (deleteCategoryById(editingCatId)) {
+        closeCatModal();
+        render();
+      }
+    }
+  });
+
+  document.getElementById('cat-modal-overlay').addEventListener('click', function(e) {
+    if (e.target === this) closeCatModal();
   });
 }
