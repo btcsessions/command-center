@@ -14,16 +14,16 @@ export default defineConfig({
   },
   plugins: [
     VitePWA({
-      registerType: 'prompt',
+      registerType: 'autoUpdate',
       includeAssets: ['icons/*.svg'],
       manifest: {
-        name: 'Next Action',
-        short_name: 'Next Action',
+        name: 'Command Center',
+        short_name: 'Command Center',
         description: 'Task management with recurring tasks and cross-device sync',
         start_url: '/',
         display: 'standalone',
-        background_color: '#0f172a',
-        theme_color: '#0f172a',
+        background_color: '#0a1410',
+        theme_color: '#0a1410',
         icons: [
           { src: '/icons/icon-192.svg', sizes: '192x192', type: 'image/svg+xml' },
           { src: '/icons/icon-512.svg', sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' }

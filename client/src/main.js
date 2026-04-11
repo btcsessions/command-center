@@ -180,8 +180,11 @@ function initBackup() {
 // --- PWA Update ---
 function initPWAUpdate() {
   if ('serviceWorker' in navigator) {
+    let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      // New service worker activated
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
     });
   }
 }
