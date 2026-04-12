@@ -5,6 +5,7 @@ import { openModal, closeModal, initModalEvents, openCatModal, initCatModalEvent
 import { initGlobalDrag } from './utils/drag.js';
 import { initSync } from './sync.js';
 import { api } from './api.js';
+import { clearTasks, clearAllOps, setMeta } from './db.js';
 import { getTodayStr } from './utils/dates.js';
 import { initHabits, renderHabits } from './components/habits.js';
 import { initCalendar } from './components/calendar.js';
@@ -143,6 +144,31 @@ function initEventDelegation() {
   });
 }
 
+// --- Force Sync ---
+function initForceSync() {
+  document.getElementById('btn-force-sync').addEventListener('click', async () => {
+    if (!navigator.onLine) {
+      alert('You are offline. Connect to the internet and try again.');
+      return;
+    }
+    try {
+      updateSyncIndicator('pending');
+      // Clear all local data
+      await clearTasks();
+      await clearAllOps();
+      await setMeta('lastSyncSequence', 0);
+      // Reload fresh from server
+      await initialLoad();
+      render();
+      renderHabits();
+      updateSyncIndicator('synced');
+    } catch (err) {
+      alert('Force sync failed: ' + err.message);
+      updateSyncIndicator('error');
+    }
+  });
+}
+
 // --- Export / Import ---
 function initBackup() {
   document.getElementById('btn-export').addEventListener('click', async () => {
@@ -228,6 +254,7 @@ async function init() {
   initCalendar();
   initGlobalDrag();
   initBackup();
+  initForceSync();
   initPWAUpdate();
 
   initSync({
