@@ -27,8 +27,8 @@ router.post('/push', (req, res) => {
           if (existing) break; // Already exists, skip
 
           db.prepare(`
-            INSERT INTO tasks (id, category, title, recurring_type, recurring_days, recurring_interval, sort_order, urgency, due_date, notes, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tasks (id, category, title, recurring_type, recurring_days, recurring_interval, sort_order, urgency, due_date, notes, created_at, updated_at, is_project, parent_id, subtask_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).run(
             task.id,
             task.category,
@@ -41,7 +41,10 @@ router.post('/push', (req, res) => {
             task.dueDate || null,
             task.notes || '',
             task.createdAt || ts,
-            ts
+            ts,
+            task.isProject ? 1 : 0,
+            task.parentId || null,
+            JSON.stringify(task.subtaskOrder || [])
           );
 
           db.prepare(`INSERT INTO sync_log (task_id, op_type, field, value, timestamp, device_id) VALUES (?, 'create', '*', NULL, ?, ?)`).run(task.id, ts, deviceId);
@@ -67,6 +70,9 @@ router.post('/push', (req, res) => {
             fields.recurring_days = updates.recurring?.days ? JSON.stringify(updates.recurring.days) : null;
             fields.recurring_interval = updates.recurring?.interval || null;
           }
+          if (updates.isProject !== undefined) fields.is_project = updates.isProject ? 1 : 0;
+          if (updates.parentId !== undefined) fields.parent_id = updates.parentId || null;
+          if (updates.subtaskOrder !== undefined) fields.subtask_order = JSON.stringify(updates.subtaskOrder);
 
           if (Object.keys(fields).length > 0) {
             fields.updated_at = ts;
@@ -170,7 +176,10 @@ router.post('/pull', (req, res) => {
         sortOrder: row.sort_order,
         urgency: row.urgency,
         dueDate: row.due_date,
-        notes: row.notes || ''
+        notes: row.notes || '',
+        isProject: !!row.is_project,
+        parentId: row.parent_id || null,
+        subtaskOrder: row.subtask_order ? JSON.parse(row.subtask_order) : []
       }
     });
   }
